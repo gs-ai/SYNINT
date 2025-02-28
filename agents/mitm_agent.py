@@ -7,16 +7,7 @@ attacks by constructing a directed graph from network logs and then applying a r
 ensemble-based centrality analysis. Using a blend of betweenness, eigenvector, and closeness
 centrality measures—each normalized and fused via a weighted ensemble—we compute an aggregated
 suspicion score for each node. In addition, community detection via greedy modularity is employed
-to reveal underlying network structures. This is not a dummy model—it's the real deal,
-designed for the safety and security of those who rely on our system.
-
-Usage (direct):
-    python mitm_advanced.py "<network logs>"
-
-    Where <network logs> are newline-separated entries in the format "source -> destination".
-
-Usage (from main script):
-    python osintfoolkit.py mitm_advanced "<network logs>"
+to reveal underlying network structures.
 """
 
 import argparse
@@ -24,6 +15,7 @@ import json
 import logging
 import networkx as nx
 import numpy as np
+from agents.base_agent import OSINTAgent
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -38,12 +30,13 @@ def normalize_centrality(centrality_dict):
     return {node: val / max_val for node, val in centrality_dict.items()}
 
 def analyze_mitm(indicator: str) -> dict:
-    # Parse network logs: each line expected as "source -> destination"
-    lines = [line.strip() for line in indicator.splitlines() if line.strip()]
-    if not lines:
-        raise ValueError("No network log data provided.")
+    # Check if input looks like network log data
+    if not any("->" in line for line in indicator.splitlines()):
+        logger.info("MITM analysis skipped: Input does not appear to be valid network log data.")
+        return {"skipped": "MITM analysis skipped: Please provide newline-separated logs in the format 'source -> destination'."}
     
     G = nx.DiGraph()
+    lines = indicator.splitlines()
     for line in lines:
         if "->" in line:
             parts = [part.strip() for part in line.split("->")]
@@ -52,7 +45,7 @@ def analyze_mitm(indicator: str) -> dict:
                 G.add_edge(src, dst)
     
     if G.number_of_nodes() == 0:
-        raise ValueError("No valid graph could be constructed from the logs.")
+        return {"error": "No valid graph could be constructed from the logs."}
     
     # Compute centrality measures.
     betweenness = nx.betweenness_centrality(G)
@@ -69,7 +62,7 @@ def analyze_mitm(indicator: str) -> dict:
     clo_norm = normalize_centrality(closeness)
     
     # Ensemble: weighted aggregation of centralities.
-    # Weights are chosen as: betweenness (0.5), eigenvector (0.3), closeness (0.2).
+    # Weights: betweenness (0.5), eigenvector (0.3), closeness (0.2).
     aggregated = {}
     for node in G.nodes():
         aggregated[node] = (
@@ -78,8 +71,8 @@ def analyze_mitm(indicator: str) -> dict:
             0.2 * clo_norm.get(node, 0)
         )
     
-    # Define a threshold for suspicious nodes (can be tuned based on domain knowledge).
-    threshold = 0.75  # Nodes with aggregated score above this are flagged.
+    # Define threshold for suspicious nodes.
+    threshold = 0.75
     suspicious_nodes = {node: score for node, score in aggregated.items() if score > threshold}
     
     # Perform community detection on the undirected version of the graph.
@@ -103,17 +96,17 @@ def analyze_mitm(indicator: str) -> dict:
         "graph_summary": nx.info(G)
     }
 
-def main():
+class MITMAgent(OSINTAgent):
+    """
+    MITMAgent - An agent for detecting potential Man-in-the-Middle attacks using network log analysis.
+    """
+    def run(self, indicator: str) -> dict:
+        return analyze_mitm(indicator)
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MITM Module - Advanced Man-in-the-Middle Intelligence Analysis.")
     parser.add_argument("indicator", type=str, help="Network logs (newline-separated, format: 'source -> destination')")
     args = parser.parse_args()
     
-    try:
-        result = analyze_mitm(args.indicator)
-        print(json.dumps(result, indent=4))
-    except Exception as e:
-        logger.exception("Error in MITM analysis")
-        print(json.dumps({"error": str(e)}, indent=4))
-
-if __name__ == "__main__":
-    main()
+    result = MITMAgent().run(args.indicator)
+    print(json.dumps(result, indent=4))

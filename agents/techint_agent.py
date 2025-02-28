@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 TECHINT Module - Technical Intelligence
----------------------------------------
+-----------------------------------------
 Advanced version with mathematically optimized risk scoring and feature extraction.
 """
 
@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import scipy.special  # for the sigmoid (expit) function
 from math import sqrt
+from agents.base_agent import OSINTAgent
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -75,22 +76,32 @@ def advanced_surveillance_data(indicator: str) -> dict:
         logger.error(f"Error in surveillance analysis: {e}")
         return {"error": str(e)}
 
-def main():
+class TechIntAgent(OSINTAgent):
+    """
+    TechIntAgent - An agent for performing technical intelligence analysis.
+    Supports two modes:
+      - "tech": for textual technical indicator analysis.
+      - "surveillance": for image analysis.
+    """
+    def run(self, indicator: str, mode: str = "tech") -> dict:
+        try:
+            if mode == "surveillance":
+                result = advanced_surveillance_data(indicator)
+            else:
+                result = advanced_techint(indicator)
+            self.results = result
+            return result
+        except Exception as e:
+            logger.exception(f"Error during TECHINT analysis: {e}")
+            return {"error": str(e)}
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TECHINT Module - Optimized and secure.")
     parser.add_argument("indicator", type=str, help="Technical indicator or image file path")
     parser.add_argument("--mode", type=str, choices=["tech", "surveillance"], default="tech",
-                        help="Select mode: 'tech' for technical, 'surveillance' for image analysis")
+                        help="Select mode: 'tech' for technical analysis, 'surveillance' for image analysis")
     args = parser.parse_args()
     
-    try:
-        if args.mode == "surveillance":
-            result = advanced_surveillance_data(args.indicator)
-        else:
-            result = advanced_techint(args.indicator)
-        print(json.dumps(result, indent=4))
-    except Exception as e:
-        logger.exception(f"Error during analysis: {e}")
-        print(json.dumps({"error": str(e)}, indent=4))
-
-if __name__ == "__main__":
-    main()
+    agent = TechIntAgent()
+    result = agent.run(args.indicator, mode=args.mode)
+    print(json.dumps(result, indent=4))

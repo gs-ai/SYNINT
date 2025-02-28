@@ -36,28 +36,28 @@ SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framewor
 
 ---
 
-## Directory Structure
+## 📂 Project Structure
 
-Below is the neatly aligned directory tree for the project:
+The following is the directory structure of **SYNINT**:
 
-```
+```plaintext
 SYNINT/
-├── README.MD                 
-├── agent_manager.py          
+│── README.MD
+│── agent_manager.py
+│── main.py
+│── requirements.txt
+│
 ├── agents/
-│   ├── __init__.py           
-│   ├── base_agent.py         
-│   ├── cybint_agent.py       
-│   ├── ids_agent.py          
-│   ├── mitm_agent.py         
-│   ├── siem_agent.py         
-│   ├── social_media_agent.py 
-│   ├── techint_agent.py      
+│   ├── __init__.py
+│   ├── base_agent.py
+│   ├── cybint_agent.py
+│   ├── ids_agent.py
+│   ├── mitm_agent.py
+│   ├── siem_agent.py
+│   ├── social_media_agent.py
+│   ├── techint_agent.py
 │   ├── threat_analyzer_agent.py
-│   └── whois_agent.py        
-├── main.py                   
-└── requirements.txt          
-```
+│   └── whois_agent.py
 
 ---
 
