@@ -9,7 +9,7 @@ SYNINT/
 │   ├── social_media_agent.py
 │   ├── techint_agent.py
 │   ├── threat_analyzer_agent.py
-│   └── whois_agent.py     # Renamed to whois_agent.py
+│   └── whois_agent.py     
 ├── agent_manager.py
 ├── main.py
 └── requirements.txt
