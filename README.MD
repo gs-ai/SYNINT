@@ -205,5 +205,3 @@ python -m unittest discover tests
 
 This project is licensed under the [MIT License](LICENSE).
 ```
-
-This README.md is fully regenerated with neat alignment and clear formatting for every section. Adjust the details (e.g., repository URL, license information) as needed for your project.
