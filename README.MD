@@ -3,7 +3,10 @@ Below is the regenerated and neatly formatted **README.md** file:
 ```markdown
 # SYNINT OSINT Framework
 
-SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framework designed to integrate multiple agents for comprehensive data gathering, analysis, and threat intelligence. The system is self-contained, does not rely on external APIs, and emphasizes minimal network noise and low resource usage.
+SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framework designed to 
+integrate multiple agents for comprehensive data gathering, analysis, and threat intelligence. 
+The system is self-contained, does not rely on external APIs, and emphasizes minimal network 
+noise and low resource usage.
 
 ---
 
@@ -23,16 +26,20 @@ SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framewor
 ## Features
 
 - **Modular Architecture:**  
-  Every agent inherits from a common abstract base class (`OSINTAgent`) defined in `agents/base_agent.py` and implements a standard `run(target)` method. This design enables easy integration of new agents.
+  Every agent inherits from a common abstract base class (`OSINTAgent`) defined in `agents/base_agent.py` 
+  and implements a standard `run(target)` method. This design enables easy integration of new agents.
 
 - **Stealth and Efficiency:**  
-  The framework minimizes external API calls and network noise by performing all operations locally. It utilizes optimized algorithms and minimal logging to remain unobtrusive.
+  The framework minimizes external API calls and network noise by performing all operations locally. It 
+  utilizes optimized algorithms and minimal logging to remain unobtrusive.
 
 - **Parallel Execution:**  
-  Agents are executed concurrently through the `AgentManager` (located in `agent_manager.py`) using Python’s `ThreadPoolExecutor`, reducing overall processing time.
+  Agents are executed concurrently through the `AgentManager` (located in `agent_manager.py`) using 
+  Python’s `ThreadPoolExecutor`, reducing overall processing time.
 
 - **Self-Contained:**  
-  The system does not depend on external APIs. All intelligence is derived using local computations (e.g., ML-based anomaly detection, graph analysis, Fourier transforms).
+  The system does not depend on external APIs. All intelligence is derived using local computations 
+  (e.g., ML-based anomaly detection, graph analysis, Fourier transforms).
 
 ---
 
@@ -95,7 +102,8 @@ SYNINT/
 
 ## Usage
 
-You can run the framework as a whole or execute individual agents. The `AgentManager` (located in the root-level `agent_manager.py`) orchestrates the agents.
+You can run the framework as a whole or execute individual agents. The `AgentManager` 
+(located in the root-level `agent_manager.py`) orchestrates the agents.
 
 ### Running All Agents
 
