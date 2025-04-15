@@ -1,6 +1,5 @@
-Below is the regenerated and neatly formatted **README.md** file:
 
-```markdown
+
 # SYNINT OSINT Framework
 
 SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framework designed to 
