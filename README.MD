@@ -1,5 +1,3 @@
-
-
 # SYNINT OSINT Framework
 
 SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framework designed to 
