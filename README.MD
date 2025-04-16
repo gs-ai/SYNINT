@@ -1,6 +1,10 @@
 ![Project Logo](4a49d7b1-c14b-452e-a9a8-535d175d49c8.png)
 # SYNINT OSINT Framework
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+
 SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framework designed to integrate multiple agents for comprehensive data gathering, analysis, and threat intelligence. The system is self-contained, does not rely on external APIs, and emphasizes minimal network noise and low resource usage.
 
 ---
