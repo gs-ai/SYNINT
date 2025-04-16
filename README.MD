@@ -1,7 +1,8 @@
 ![Project Logo](4a49d7b1-c14b-452e-a9a8-535d175d49c8.png)
+
 # SYNINT OSINT Framework
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 
@@ -10,9 +11,8 @@ SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framewor
 ---
 
 ## Table of Contents
-
 - [Features](#features)
-- [Directory Structure](#directory-structure)
+- [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Agents Overview](#agents-overview)
@@ -23,43 +23,37 @@ SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framewor
 ---
 
 ## Features
-
-- **Modular Architecture:**  
-  Every agent inherits from a common abstract base class (`OSINTAgent`) defined in `agents/base_agent.py` and implements a standard `run(target)` method. This design enables easy integration of new agents.
-
-- **Stealth and Efficiency:**  
-  The framework minimizes external API calls and network noise by performing all operations locally. It utilizes optimized algorithms and minimal logging to remain unobtrusive.
-
-- **Parallel Execution:**  
-  Agents are executed concurrently through the `AgentManager` (located in `agent_manager.py`) using Python’s `ThreadPoolExecutor`, reducing overall processing time.
-
-- **Self-Contained:**  
-  The system does not depend on external APIs. All intelligence is derived using local computations (e.g., ML-based anomaly detection, graph analysis, Fourier transforms).
+- **Modular Architecture:** Every agent inherits from a common abstract base class (`OSINTAgent`) defined in `agents/base_agent.py` and implements a standard `run(target)` method. This design enables easy integration of new agents.
+- **Stealth and Efficiency:** The framework minimizes external API calls and network noise by performing all operations locally. It utilizes optimized algorithms and minimal logging to remain unobtrusive.
+- **Parallel Execution:** Agents are executed concurrently through the `AgentManager` (located in `agent_manager.py`) using Python’s `ThreadPoolExecutor`, reducing overall processing time.
+- **Self-Contained:** The system does not depend on external APIs. All intelligence is derived using local computations (e.g., ML-based anomaly detection, graph analysis, Fourier transforms).
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
-The following is the directory structure of **SYNINT**:
-
-```plaintext
+```
 SYNINT/
-│── README.MD
-│── agent_manager.py
-│── main.py
-│── requirements.txt
-│
-├── agents/
-│   ├── __init__.py
-│   ├── base_agent.py
-│   ├── cybint_agent.py
-│   ├── ids_agent.py
-│   ├── mitm_agent.py
-│   ├── siem_agent.py
-│   ├── social_media_agent.py
-│   ├── techint_agent.py
-│   ├── threat_analyzer_agent.py
-│   └── whois_agent.py
+├── README.MD
+├── agent_manager.py
+├── main.py
+├── requirements.txt
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── LICENSE
+├── 4a49d7b1-c14b-452e-a9a8-535d175d49c8.png
+└── agents/
+    ├── __init__.py
+    ├── base_agent.py
+    ├── cybint_agent.py
+    ├── ids_agent.py
+    ├── mitm_agent.py
+    ├── siem_agent.py
+    ├── social_media_agent.py
+    ├── techint_agent.py
+    ├── threat_analyzer_agent.py
+    └── whois_agent.py
+```
 
 ---
 
@@ -68,7 +62,7 @@ SYNINT/
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/yourusername/SYNINT.git
+   git clone https://github.com/gs-ai/SYNINT.git
    cd SYNINT
    ```
 
@@ -107,11 +101,7 @@ In your `main.py` file, you might have code similar to the following:
 #!/usr/bin/env python3
 import json
 import sys
-
-# Import AgentManager from the root-level file
 from agent_manager import AgentManager
-
-# Import agent classes from the agents package
 from agents.cybint_agent import CybintAgent
 from agents.social_media_agent import SocialMediaAgent
 from agents.whois_agent import WhoisAgent
@@ -125,11 +115,8 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python main.py <target>")
         sys.exit(1)
-    
     target = sys.argv[1]
     manager = AgentManager()
-
-    # Register all desired agents
     manager.register_agent(CybintAgent())
     manager.register_agent(SocialMediaAgent())
     manager.register_agent(WhoisAgent())
@@ -138,8 +125,6 @@ def main():
     manager.register_agent(SIEMAgent())
     manager.register_agent(TechIntAgent())
     manager.register_agent(ThreatAnalyzerAgent())
-
-    # Run all agents on the target
     results = manager.run_all(target)
     print(json.dumps(results, indent=4))
 
@@ -158,8 +143,7 @@ from agents.ids_agent import IDSAgent
 manager = AgentManager()
 manager.register_agent(IDSAgent())
 
-ids_logs = """2021-01-01 12:00:00 Failed login from 10.0.0.5
-2021-01-01 12:05:00 Successful login from 10.0.0.5"""
+ids_logs = """2021-01-01 12:00:00 Failed login from 10.0.0.5\n2021-01-01 12:05:00 Successful login from 10.0.0.5"""
 
 result = manager.run_agent("IDSAgent", ids_logs)
 print(result)
@@ -206,3 +190,13 @@ python -m unittest discover tests
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Contributing
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Code of Conduct
+
+Please see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
