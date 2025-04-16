@@ -1,0 +1,15 @@
+SYNINT/
+├── agents/
+│   ├── __init__.py
+│   ├── base_agent.py
+│   ├── cybint_agent.py
+│   ├── ids_agent.py
+│   ├── mitm_agent.py
+│   ├── siem_agent.py
+│   ├── social_media_agent.py
+│   ├── techint_agent.py
+│   ├── threat_analyzer_agent.py
+│   └── whois_agent.py     
+├── agent_manager.py
+├── main.py
+└── requirements.txt
