@@ -1,0 +1,6 @@
+# Ignore project logo
+4a49d7b1-c14b-452e-a9a8-535d175d49c8.png
+# Ignore macOS system files
+.DS_Store
+# Ignore VSCode settings
+.vscode/
