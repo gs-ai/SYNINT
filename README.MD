@@ -1,6 +1,5 @@
+![Project Logo](4a49d7b1-c14b-452e-a9a8-535d175d49c8.png)
 # SYNINT OSINT Framework
-
-![SYNINT Framework Overview](4a49d7b1-c14b-452e-a9a8-535d175d49c8.png)
 
 SYNINT is a modular, stealth-optimized Open-Source Intelligence (OSINT) framework designed to integrate multiple agents for comprehensive data gathering, analysis, and threat intelligence. The system is self-contained, does not rely on external APIs, and emphasizes minimal network noise and low resource usage.
 
