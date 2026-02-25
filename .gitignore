@@ -1,6 +1,54 @@
-# Ignore project logo
-4a49d7b1-c14b-452e-a9a8-535d175d49c8.png
-# Ignore macOS system files
+# macOS
 .DS_Store
-# Ignore VSCode settings
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+synintENV/
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs and reports
+*.log
+synint_report.json
+synint_report.html
+synint_report.pdf
+
+# IDE
 .vscode/
+.idea/
+
+# OSINT artifacts (optional, keep repo clean)
+data/
+output/
+reports/
+cache/
+tmp/
+*.sqlite
+*.db
+
+# Secrets (never commit)
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.*
+.env.*
