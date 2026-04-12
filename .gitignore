@@ -1,4 +1,4 @@
-# macOS
+# OS files
 .DS_Store
 .DS_Store?
 ._*
@@ -6,49 +6,58 @@
 .Trashes
 .fseventsd
 
-# Python
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python bytecode and build artifacts
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 *.so
 *.egg-info/
-dist/
+.eggs/
 build/
+dist/
+pip-wheel-metadata/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
 # Virtual environments
 .venv/
 venv/
 env/
 synintENV/
-*.env
+.python-version
 
-# Jupyter
+# Notebook artifacts
 .ipynb_checkpoints/
 
-# Logs and reports
-*.log
-synint_report.json
-synint_report.html
-synint_report.pdf
-
-# IDE
-.vscode/
-.idea/
-
-# OSINT artifacts (optional, keep repo clean)
+# Runtime output and generated artifacts
+reports/
 data/
 output/
-reports/
 cache/
 tmp/
+*.log
 *.sqlite
 *.db
 
-# Secrets (never commit)
+# Local environment and secrets
+.env
+.env.*
+*.env
 *.key
 *.pem
 *.p12
 *.pfx
 secrets.*
-.env.*

@@ -17,6 +17,7 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 from agents.base_agent import OSINTAgent
+from ._shared import ok, skipped, structured_error
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
@@ -26,6 +27,9 @@ class IDSAgent(OSINTAgent):
     IDSAgent - An agent for performing advanced intrusion detection analysis on IDS log events.
     Uses an ensemble of IsolationForest, Local Outlier Factor, and One-Class SVM for anomaly detection.
     """
+    name = "IDSAgent"
+    supported_target_types = ("multiline",)
+
     def compute_adaptive_contamination(self, X_reduced, random_state=42):
         """
         Compute an adaptive contamination parameter based on the distribution of decision scores
@@ -52,7 +56,11 @@ class IDSAgent(OSINTAgent):
             logs = [line.strip() for line in indicator.splitlines() if line.strip()]
             if len(logs) < 2:
                 logger.info("IDS analysis skipped: Insufficient log data.")
-                return {"skipped": "IDS analysis skipped: Insufficient log data. At least 2 log entries are required."}
+                return skipped(
+                    self.name,
+                    indicator,
+                    "insufficient log data. at least 2 log entries are required.",
+                )
             
             logger.info(f"Number of log entries: {len(logs)}")
             
@@ -94,20 +102,29 @@ class IDSAgent(OSINTAgent):
             
             total_anomalies = sum(1 for pred in ensemble_predictions if pred == -1)
             logger.info(f"Detected {total_anomalies} anomalies out of {len(logs)} log entries.")
-            
-            return {
-                "module": "IDS",
-                "estimated_contamination": contamination,
+            findings = {
+                "estimated_contamination": float(contamination),
                 "results": anomaly_results,
                 "detector_outputs": {
                     "IsolationForest": predictions_if.tolist(),
                     "LocalOutlierFactor": predictions_lof.tolist(),
-                    "OneClassSVM": predictions_ocsvm.tolist()
-                }
+                    "OneClassSVM": predictions_ocsvm.tolist(),
+                },
+                "anomaly_count": total_anomalies,
+                "log_count": len(logs),
             }
+            risk = min(total_anomalies / max(1, len(logs)), 1.0)
+            return ok(
+                self.name,
+                indicator,
+                findings,
+                risk,
+                evidence_mode="active" if total_anomalies else "passive",
+                evidence_count=total_anomalies,
+            )
         except Exception as e:
             logger.error(f"Error in IDS analysis: {e}")
-            return {"error": str(e)}
+            return structured_error(self.name, indicator, e)
 
     def run(self, indicator: str) -> dict:
         """

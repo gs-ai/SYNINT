@@ -1,6 +1,21 @@
+# Core runtime
 requests
 numpy
+scipy
 scikit-learn
 networkx
+
+# Document and media ingestion
+pypdf
+python-docx
+openpyxl
+python-pptx
+pillow
+pytesseract
 opencv-python
-scipy
+
+# Optional collectors / integrations
+camoufox
+scrapy
+scrapling
+waymore

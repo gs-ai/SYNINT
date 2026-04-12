@@ -16,6 +16,7 @@ import logging
 import networkx as nx
 import numpy as np
 from agents.base_agent import OSINTAgent
+from ._shared import ok, skipped, structured_error
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +34,11 @@ def analyze_mitm(indicator: str) -> dict:
     # Check if input looks like network log data
     if not any("->" in line for line in indicator.splitlines()):
         logger.info("MITM analysis skipped: Input does not appear to be valid network log data.")
-        return {"skipped": "MITM analysis skipped: Please provide newline-separated logs in the format 'source -> destination'."}
+        return skipped(
+            "MITMAgent",
+            indicator,
+            "please provide newline-separated logs in the format 'source -> destination'.",
+        )
     
     G = nx.DiGraph()
     lines = indicator.splitlines()
@@ -45,7 +50,7 @@ def analyze_mitm(indicator: str) -> dict:
                 G.add_edge(src, dst)
     
     if G.number_of_nodes() == 0:
-        return {"error": "No valid graph could be constructed from the logs."}
+        return structured_error("MITMAgent", indicator, "No valid graph could be constructed from the logs.")
     
     # Compute centrality measures.
     betweenness = nx.betweenness_centrality(G)
@@ -88,18 +93,29 @@ def analyze_mitm(indicator: str) -> dict:
         "aggregated": aggregated
     }
     
-    return {
-        "module": "MITM",
+    findings = {
         "suspicious_nodes": suspicious_nodes,
         "centrality_scores": centrality_scores,
         "communities": community_list,
-        "graph_summary": nx.info(G)
+        "graph_summary": nx.info(G),
     }
+    risk = min(len(suspicious_nodes) / max(1, G.number_of_nodes()), 1.0)
+    return ok(
+        "MITMAgent",
+        indicator,
+        findings,
+        risk,
+        evidence_mode="active" if suspicious_nodes else "passive",
+        evidence_count=len(suspicious_nodes),
+    )
 
 class MITMAgent(OSINTAgent):
     """
     MITMAgent - An agent for detecting potential Man-in-the-Middle attacks using network log analysis.
     """
+    name = "MITMAgent"
+    supported_target_types = ("multiline",)
+
     def run(self, indicator: str) -> dict:
         return analyze_mitm(indicator)
 

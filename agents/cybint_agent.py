@@ -8,13 +8,15 @@ import ssl
 from datetime import datetime, timezone
 from typing import Dict, List
 
-import requests
-
 from agents.base_agent import OSINTAgent
+from collectors.utils import create_safe_session
+from ._shared import normalize_target, ok, structured_error
 
 
 class CybintAgent(OSINTAgent):
     """Performs lightweight, real network checks for a target."""
+    name = "CybintAgent"
+    supported_target_types = ("domain", "ip")
 
     COMMON_PORTS = [21, 22, 23, 25, 53, 80, 110, 143, 443, 3389]
 
@@ -67,9 +69,10 @@ class CybintAgent(OSINTAgent):
         findings: List[str] = []
         headers_seen: Dict[str, str] = {}
         url = f"https://{target}"
+        session = create_safe_session()
 
         try:
-            response = requests.get(url, timeout=self.timeout, allow_redirects=True)
+            response = session.get(url, timeout=self.timeout, allow_redirects=True)
             headers = response.headers
             for header_name in [
                 "Strict-Transport-Security",
@@ -93,43 +96,46 @@ class CybintAgent(OSINTAgent):
             return {"url": url, "error": str(exc), "findings": findings}
 
     def run(self, target: str) -> Dict[str, object]:
-        target_str = str(target).strip()
-        resolution = self._resolve_target(target_str)
-        if resolution["error"]:
-            result: Dict[str, object] = {
-                "agent": "CybintAgent",
-                "target": target_str,
-                "status": "error",
-                "error": f"Target resolution failed: {resolution['error']}",
+        target_str = normalize_target(str(target).strip())
+        try:
+            resolution = self._resolve_target(target_str)
+            if resolution["error"]:
+                return structured_error(self.name, target_str, f"Target resolution failed: {resolution['error']}")
+
+            resolved_address = str(resolution["resolved_address"])
+            open_ports = self._check_open_ports(resolved_address)
+            tls_data = self._tls_certificate(target_str)
+            http_data = self._http_security_headers(target_str)
+
+            alert_findings: List[str] = []
+            if 21 in open_ports:
+                alert_findings.append("FTP port 21 is open")
+            if 23 in open_ports:
+                alert_findings.append("Telnet port 23 is open")
+            if 3389 in open_ports:
+                alert_findings.append("RDP port 3389 is open")
+            if isinstance(tls_data, dict) and tls_data.get("expired") is True:
+                alert_findings.append("TLS certificate appears expired")
+            alert_findings.extend(http_data.get("findings", []))
+
+            findings = {
+                "resolved_address": resolved_address,
+                "open_ports": open_ports,
+                "tls": tls_data,
+                "http": http_data,
+                "alerts": alert_findings,
             }
+
+            risk = 0.03 + min(len(alert_findings) * 0.05, 0.35)
+            result = ok(
+                self.name,
+                target_str,
+                findings,
+                risk,
+                evidence_mode="active" if alert_findings else "passive",
+                evidence_count=len(alert_findings),
+            )
             self.results = result
             return result
-
-        resolved_address = str(resolution["resolved_address"])
-        open_ports = self._check_open_ports(resolved_address)
-        tls_data = self._tls_certificate(target_str)
-        http_data = self._http_security_headers(target_str)
-
-        findings: List[str] = []
-        if 21 in open_ports:
-            findings.append("FTP port 21 is open")
-        if 23 in open_ports:
-            findings.append("Telnet port 23 is open")
-        if 3389 in open_ports:
-            findings.append("RDP port 3389 is open")
-        if isinstance(tls_data, dict) and tls_data.get("expired") is True:
-            findings.append("TLS certificate appears expired")
-        findings.extend(http_data.get("findings", []))
-
-        result = {
-            "agent": "CybintAgent",
-            "target": target_str,
-            "status": "ok",
-            "resolved_address": resolved_address,
-            "open_ports": open_ports,
-            "tls": tls_data,
-            "http": http_data,
-            "findings": findings,
-        }
-        self.results = result
-        return result
+        except Exception as exc:
+            return structured_error(self.name, target_str, exc)

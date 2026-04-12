@@ -10,11 +10,9 @@ import socket
 from pathlib import Path
 from typing import Dict, List
 
-import cv2
-import numpy as np
-import requests
-
 from agents.base_agent import OSINTAgent
+from collectors.utils import create_safe_session
+from ._shared import normalize_target, ok, structured_error
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 def analyze_tech_services(indicator: str, timeout: int = 3) -> Dict[str, object]:
     """Collect observable service metadata for a host or IP."""
-    target = str(indicator).strip()
+    target = normalize_target(str(indicator).strip())
     observations: List[str] = []
 
     try:
@@ -42,7 +40,8 @@ def analyze_tech_services(indicator: str, timeout: int = 3) -> Dict[str, object]
 
     http_info: Dict[str, object] = {}
     try:
-        response = requests.get(f"https://{target}", timeout=timeout, allow_redirects=True)
+        session = create_safe_session()
+        response = session.get(f"https://{target}", timeout=timeout, allow_redirects=True)
         server = response.headers.get("Server")
         powered_by = response.headers.get("X-Powered-By")
         http_info = {
@@ -71,6 +70,17 @@ def analyze_tech_services(indicator: str, timeout: int = 3) -> Dict[str, object]
 
 def analyze_surveillance_data(indicator: str) -> Dict[str, object]:
     """Analyze a real image file using frequency-domain metrics."""
+    try:
+        import cv2  # type: ignore
+        import numpy as np  # type: ignore
+    except Exception:
+        return {
+            "module": "SURVEILLANCE",
+            "status": "error",
+            "indicator": str(indicator),
+            "error": "opencv-python and numpy are required for surveillance mode",
+        }
+
     image_path = Path(indicator)
     if not image_path.exists():
         return {
@@ -109,18 +119,39 @@ def analyze_surveillance_data(indicator: str) -> Dict[str, object]:
 
 class TechIntAgent(OSINTAgent):
     """Technical intelligence agent with host and surveillance analysis modes."""
+    name = "TechIntAgent"
+    supported_target_types = ("domain", "ip")
 
     def run(self, indicator: str, mode: str = "tech") -> Dict[str, object]:
         try:
+            normalized_indicator = normalize_target(indicator) if mode == "tech" else indicator
             if mode == "surveillance":
-                result = analyze_surveillance_data(indicator)
+                raw = analyze_surveillance_data(indicator)
             else:
-                result = analyze_tech_services(indicator)
+                raw = analyze_tech_services(normalized_indicator)
+            if raw.get("status") == "error":
+                return structured_error(self.name, indicator, raw.get("error", "techint failure"))
+
+            findings = {k: v for k, v in raw.items() if k not in {"module", "status", "indicator"}}
+            evidence_count = 0
+            if isinstance(findings.get("open_ports"), list):
+                evidence_count += len(findings.get("open_ports", []))
+            if isinstance(findings.get("observations"), list):
+                evidence_count += len(findings.get("observations", []))
+            risk = min(0.03 + evidence_count * 0.02, 0.4)
+            result = ok(
+                self.name,
+                normalized_indicator if mode == "tech" else indicator,
+                findings,
+                risk,
+                evidence_mode="active" if evidence_count else "passive",
+                evidence_count=evidence_count,
+            )
             self.results = result
             return result
         except Exception as exc:
             logger.exception("Error during TECHINT analysis: %s", exc)
-            return {"module": "TECHINT", "status": "error", "error": str(exc)}
+            return structured_error(self.name, indicator, exc)
 
 
 if __name__ == "__main__":

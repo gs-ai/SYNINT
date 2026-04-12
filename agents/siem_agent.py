@@ -23,6 +23,7 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from agents.base_agent import OSINTAgent
+from ._shared import ok, skipped, structured_error
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -49,17 +50,19 @@ class SIEMAgent(OSINTAgent):
     If the framework is invoked with a domain as indicator, this agent will return
     a "skipped" result because clustering requires event lines.
     """
+    name = "SIEMAgent"
+    supported_target_types = ("multiline",)
 
     def analyze_siem(self, indicator: str) -> Dict[str, Any]:
         try:
             events = [line.strip() for line in str(indicator).splitlines() if line.strip()]
             if len(events) < 2:
-                return {
-                    "module": "SIEM",
-                    "status": "skipped",
-                    "reason": "Insufficient SIEM events for clustering. Provide at least 2 newline-separated log lines.",
-                    "n_events": len(events),
-                }
+                return skipped(
+                    self.name,
+                    indicator,
+                    "insufficient SIEM events for clustering. provide at least 2 newline-separated log lines.",
+                    findings={"n_events": len(events)},
+                )
 
             vectorizer = TfidfVectorizer(stop_words="english", max_features=1000)
             X = vectorizer.fit_transform(events)
@@ -67,13 +70,12 @@ class SIEMAgent(OSINTAgent):
             # Guard: SVD requires at least 2 features to be meaningful.
             n_features = X.shape[1]
             if n_features < 2:
-                return {
-                    "module": "SIEM",
-                    "status": "skipped",
-                    "reason": "Insufficient feature space for semantic clustering (too few unique tokens).",
-                    "n_events": len(events),
-                    "n_features": int(n_features),
-                }
+                return skipped(
+                    self.name,
+                    indicator,
+                    "insufficient feature space for semantic clustering (too few unique tokens).",
+                    findings={"n_events": len(events), "n_features": int(n_features)},
+                )
 
             n_components = min(100, n_features - 1)
             svd = TruncatedSVD(n_components=n_components, random_state=42)
@@ -88,12 +90,12 @@ class SIEMAgent(OSINTAgent):
 
             # Agglomerative requires at least 2 samples.
             if X_reduced.shape[0] < 2:
-                return {
-                    "module": "SIEM",
-                    "status": "skipped",
-                    "reason": "Insufficient samples after reduction.",
-                    "n_events": len(events),
-                }
+                return skipped(
+                    self.name,
+                    indicator,
+                    "insufficient samples after reduction.",
+                    findings={"n_events": len(events)},
+                )
 
             k = _estimate_optimal_clusters(svd, threshold=0.90, min_clusters=2)
             k = min(k, len(events))  # cannot have more clusters than samples
@@ -105,17 +107,23 @@ class SIEMAgent(OSINTAgent):
             for label, event in zip(labels, events):
                 clusters.setdefault(str(int(label)), []).append(event)
 
-            return {
-                "module": "SIEM",
-                "status": "ok",
+            findings = {
                 "n_events": len(events),
                 "n_clusters": int(k),
                 "clusters": clusters,
             }
+            return ok(
+                self.name,
+                indicator,
+                findings,
+                min(int(k) / max(1, len(events)), 1.0),
+                evidence_mode="active",
+                evidence_count=int(k),
+            )
 
         except Exception as exc:
             logger.exception("SIEM analysis error")
-            return {"module": "SIEM", "status": "error", "error": str(exc)}
+            return structured_error(self.name, indicator, exc)
 
     def run(self, indicator: str) -> Dict[str, Any]:
         return self.analyze_siem(indicator)
