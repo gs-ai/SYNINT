@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 from urllib.parse import urlparse
+
+import requests
 
 from agents.base_agent import OSINTAgent
 from synint_paths import COLLECTION_ARTIFACTS_DIR
@@ -35,6 +38,7 @@ class WaybackAnalysisAgent(OSINTAgent):
         "login",
     ]
     FILE_EXTENSIONS = (".zip", ".tar", ".gz", ".7z", ".sql", ".bak", ".env", ".csv", ".log", ".json", ".xml")
+    CDX_ENDPOINT = "https://webcache.archive.org/cdx/search/cdx"
 
     def _waymore_binary(self) -> str:
         found = shutil.which("waymore")
@@ -115,49 +119,79 @@ class WaybackAnalysisAgent(OSINTAgent):
                 urls.append(value)
         return unique_sorted(urls)
 
+    def _fallback_archive_urls(self, target_input: str, output_file: Path) -> Tuple[List[str], Dict[str, Any]]:
+        query = [
+            ("url", target_input),
+            ("output", "json"),
+            ("fl", "original,statuscode,mimetype,timestamp"),
+            ("filter", "statuscode:200"),
+            ("collapse", "urlkey"),
+            ("limit", "500"),
+        ]
+        response = requests.get(self.CDX_ENDPOINT, params=query, timeout=min(self._timeout_seconds(), 60))
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload[1:] if isinstance(payload, list) and payload else []
+        urls = unique_sorted(
+            row[0]
+            for row in rows
+            if isinstance(row, list) and row and isinstance(row[0], str) and row[0].startswith(("http://", "https://"))
+        )
+        output_file.write_text("\n".join(urls) + ("\n" if urls else ""), encoding="utf-8")
+        return urls, {
+            "endpoint": self.CDX_ENDPOINT,
+            "query": query,
+            "rows_returned": len(rows),
+        }
+
     def run(self, indicator: Any):
         target, context, _ = unpack_pipeline_input(indicator)
         try:
             if not target:
                 return skipped(self.name, indicator, "missing target")
 
-            binary = self._waymore_binary()
-            if not binary:
-                return skipped(self.name, target, "waymore CLI not found in PATH")
-
             target_input = self._waymore_input(target)
             if not target_input:
                 return skipped(self.name, target, "unable to normalize target for waymore")
 
             artifact_dir, urls_output = self._artifact_paths(context)
-            command = self._build_command(binary, target_input, urls_output)
-            completed = subprocess.run(
-                command,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout_seconds(),
-            )
-
-            archived_urls = self._load_urls(urls_output)
+            binary = self._waymore_binary()
+            command: List[str] = []
+            completed: subprocess.CompletedProcess[str] | None = None
+            archived_urls: List[str] = []
             fallback_attempted = False
             fallback_command: List[str] = []
             fallback_completed: subprocess.CompletedProcess[str] | None = None
-            stderr_text = completed.stderr or ""
-            wayback_blocked = "access denied" in stderr_text.lower() and "wayback" in stderr_text.lower()
-            if not archived_urls and wayback_blocked:
-                # Retry with Wayback excluded so Common Crawl can still contribute.
-                fallback_attempted = True
-                fallback_command = [part for part in command if part != "-xwm"]
-                fallback_command.append("-xwm")
-                fallback_completed = subprocess.run(
-                    fallback_command,
+            fallback_details: Dict[str, Any] = {}
+            wayback_blocked = False
+
+            if binary:
+                command = self._build_command(binary, target_input, urls_output)
+                completed = subprocess.run(
+                    command,
                     check=False,
                     capture_output=True,
                     text=True,
                     timeout=self._timeout_seconds(),
                 )
                 archived_urls = self._load_urls(urls_output)
+                stderr_text = completed.stderr or ""
+                wayback_blocked = "access denied" in stderr_text.lower() and "wayback" in stderr_text.lower()
+                if not archived_urls and wayback_blocked:
+                    # Retry with Wayback excluded so Common Crawl can still contribute.
+                    fallback_attempted = True
+                    fallback_command = [*command, "-xwm"]
+                    fallback_completed = subprocess.run(
+                        fallback_command,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=self._timeout_seconds(),
+                    )
+                    archived_urls = self._load_urls(urls_output)
+            else:
+                fallback_attempted = True
+                archived_urls, fallback_details = self._fallback_archive_urls(target_input, urls_output)
 
             sensitive_urls = [
                 url
@@ -175,7 +209,7 @@ class WaybackAnalysisAgent(OSINTAgent):
                 if (urlparse(url).hostname or "").strip()
             )
 
-            if not archived_urls and completed.returncode != 0:
+            if not archived_urls and completed is not None and completed.returncode != 0:
                 stderr = (completed.stderr or "").strip()
                 return structured_error(self.name, target, stderr or f"waymore exited with code {completed.returncode}")
 
@@ -183,6 +217,7 @@ class WaybackAnalysisAgent(OSINTAgent):
                 "waymore_input": target_input,
                 "waymore_command": command,
                 "provider_exclusions": ["virustotal", "intelx"],
+                "collection_backend": "waymore" if binary else "archive_cdx_fallback",
                 "archived_urls": archived_urls,
                 "archived_url_count": len(archived_urls),
                 "sensitive_archived_urls": sensitive_urls,
@@ -192,15 +227,16 @@ class WaybackAnalysisAgent(OSINTAgent):
                 "artifact_dir": str(artifact_dir),
                 "discovered_urls": archived_urls,
                 "execution": {
-                    "return_code": completed.returncode,
-                    "stderr_excerpt": (completed.stderr or "")[-1200:],
-                    "stdout_excerpt": (completed.stdout or "")[-1200:],
+                    "return_code": completed.returncode if completed is not None else None,
+                    "stderr_excerpt": ((completed.stderr or "")[-1200:] if completed is not None else ""),
+                    "stdout_excerpt": ((completed.stdout or "")[-1200:] if completed is not None else ""),
                     "wayback_blocked": wayback_blocked,
                     "fallback_attempted": fallback_attempted,
                     "fallback_command": fallback_command,
                     "fallback_return_code": fallback_completed.returncode if fallback_completed is not None else None,
                     "fallback_stderr_excerpt": (fallback_completed.stderr or "")[-1200:] if fallback_completed is not None else "",
                     "fallback_stdout_excerpt": (fallback_completed.stdout or "")[-1200:] if fallback_completed is not None else "",
+                    "fallback_details": fallback_details,
                 },
             }
 
@@ -223,8 +259,10 @@ class WaybackAnalysisAgent(OSINTAgent):
                 0.85,
             )
             reason = None
-            if completed.returncode != 0:
+            if completed is not None and completed.returncode != 0:
                 reason = f"waymore exited with code {completed.returncode}; parsed partial URL output"
+            elif not binary:
+                reason = "waymore unavailable; collected archive intelligence via direct CDX fallback"
             elif wayback_blocked and fallback_attempted:
                 reason = "wayback access blocked; parsed URLs using non-wayback fallback"
             return ok(
@@ -238,5 +276,7 @@ class WaybackAnalysisAgent(OSINTAgent):
             )
         except subprocess.TimeoutExpired:
             return structured_error(self.name, target, "waymore execution timed out")
+        except requests.RequestException as exc:
+            return structured_error(self.name, target, f"archive fallback request failed: {exc}")
         except Exception as exc:
             return structured_error(self.name, target, exc)

@@ -1,6 +1,7 @@
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,16 +27,24 @@ class WaybackWaymoreAgentTests(unittest.TestCase):
 
         self.assertEqual(Path(binary).resolve(), fake_waymore.resolve())
 
-    def test_skips_when_waymore_unavailable(self) -> None:
+    def test_uses_archive_fallback_when_waymore_unavailable(self) -> None:
         payload = {
             "target": "https://example.com",
             "investigation_context": {},
         }
-        with patch("agents.wayback_analysis.shutil.which", return_value=""):
+        fake_response = SimpleNamespace(
+            raise_for_status=lambda: None,
+            json=lambda: [["original", "statuscode", "mimetype", "timestamp"], ["https://example.com/archive", "200", "text/html", "20240101"]],
+        )
+        with (
+            patch("agents.wayback_analysis.shutil.which", return_value=""),
+            patch("agents.wayback_analysis.requests.get", return_value=fake_response),
+        ):
             result = WaybackAnalysisAgent().run(payload)
 
-        self.assertEqual(result.get("status"), "skipped")
-        self.assertIn("waymore", str(result.get("reason", "")).lower())
+        self.assertEqual(result.get("status"), "ok")
+        self.assertEqual(result.get("findings", {}).get("collection_backend"), "archive_cdx_fallback")
+        self.assertEqual(result.get("findings", {}).get("archived_url_count"), 1)
 
     def test_runs_waymore_without_api_key_dependent_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

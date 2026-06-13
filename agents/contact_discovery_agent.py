@@ -26,6 +26,8 @@ class ContactDiscoveryAgent(OSINTAgent):
             emails: List[str] = []
             phones: List[str] = []
             addresses: List[str] = []
+            domains: List[str] = []
+            handles: List[str] = []
             contact_pages: List[str] = []
             source_map: Dict[str, Dict[str, List[str]]] = {}
             corpus_chunks: List[str] = []
@@ -49,6 +51,8 @@ class ContactDiscoveryAgent(OSINTAgent):
                 agent_emails: List[str] = []
                 agent_phones: List[str] = []
                 agent_addresses: List[str] = []
+                agent_domains: List[str] = []
+                agent_handles: List[str] = []
 
                 for key in ["emails", "contact_emails"]:
                     values = findings.get(key)
@@ -63,6 +67,12 @@ class ContactDiscoveryAgent(OSINTAgent):
                 values = findings.get("addresses")
                 if isinstance(values, list):
                     agent_addresses.extend(str(v) for v in values)
+                values = findings.get("domains")
+                if isinstance(values, list):
+                    agent_domains.extend(str(v).lower() for v in values)
+                values = findings.get("handles")
+                if isinstance(values, list):
+                    agent_handles.extend(str(v) for v in values)
 
                 if isinstance(findings.get("contact_artifacts"), dict):
                     artifacts = findings.get("contact_artifacts", {})
@@ -70,6 +80,10 @@ class ContactDiscoveryAgent(OSINTAgent):
                         agent_emails.extend(str(v).lower() for v in artifacts["emails"])
                     if isinstance(artifacts.get("phones"), list):
                         agent_phones.extend(str(v) for v in artifacts["phones"])
+                    if isinstance(artifacts.get("domains"), list):
+                        agent_domains.extend(str(v).lower() for v in artifacts["domains"])
+                    if isinstance(artifacts.get("handles"), list):
+                        agent_handles.extend(str(v) for v in artifacts["handles"])
 
                 pages = findings.get("discovered_urls")
                 if isinstance(pages, list):
@@ -83,11 +97,15 @@ class ContactDiscoveryAgent(OSINTAgent):
                         "emails": unique_sorted(agent_emails),
                         "phones": unique_sorted(agent_phones),
                         "addresses": unique_sorted(agent_addresses),
+                        "domains": unique_sorted(agent_domains),
+                        "handles": unique_sorted(agent_handles),
                     }
 
                 emails.extend(agent_emails)
                 phones.extend(agent_phones)
                 addresses.extend(agent_addresses)
+                domains.extend(agent_domains)
+                handles.extend(agent_handles)
 
                 evidence_mode = str(result.get("evidence_mode", "none")).lower()
                 if evidence_mode in {"collected", "active", "fused"}:
@@ -112,6 +130,8 @@ class ContactDiscoveryAgent(OSINTAgent):
             emails.extend(entities.get("emails", []))
             phones.extend(entities.get("phones", []))
             addresses.extend(entities.get("addresses", []))
+            domains.extend(entities.get("domains", []))
+            handles.extend(entities.get("handles", []))
 
             structured_contacts = [
                 {"type": "email", "value": value} for value in unique_sorted(emails)
@@ -119,12 +139,18 @@ class ContactDiscoveryAgent(OSINTAgent):
                 {"type": "phone", "value": value} for value in unique_sorted(phones)
             ] + [
                 {"type": "address", "value": value} for value in unique_sorted(addresses)
+            ] + [
+                {"type": "domain", "value": value} for value in unique_sorted(domains)
+            ] + [
+                {"type": "handle", "value": value} for value in unique_sorted(handles)
             ]
 
             findings = {
                 "emails": unique_sorted(emails),
                 "phones": unique_sorted(phones),
                 "addresses": unique_sorted(addresses),
+                "domains": unique_sorted(domains),
+                "handles": unique_sorted(handles),
                 "contact_pages": unique_sorted(contact_pages),
                 "structured_contacts": structured_contacts,
                 "source_map": source_map,

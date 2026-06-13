@@ -30,6 +30,8 @@ class EntityResolutionAgent(OSINTAgent):
             "phones",
             "urls",
             "domains",
+            "ips",
+            "handles",
             "pivot_domains",
             "related_host_candidates",
             "discovered_urls",
@@ -105,6 +107,8 @@ class EntityResolutionAgent(OSINTAgent):
             return "domain", lower
         if val.startswith("+") and len(val) >= 8:
             return "phone", normalize_phone(val)
+        if val.startswith("@") and len(val) >= 3:
+            return "handle", lower
         if len(val) >= 26 and val.startswith(("1", "3", "bc1", "0x")):
             return "wallet", val
         if "/" in val and " " not in val and len(val.split("/")) == 2:

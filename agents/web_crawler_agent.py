@@ -80,6 +80,8 @@ class WebCrawlerAgent(OSINTAgent):
             download_attempts: List[Dict[str, Any]] = []
             contact_emails: List[str] = []
             contact_phones: List[str] = []
+            contact_domains: List[str] = []
+            contact_handles: List[str] = []
             sensitive_paths: List[str] = []
             per_page: List[Dict[str, Any]] = []
 
@@ -104,6 +106,8 @@ class WebCrawlerAgent(OSINTAgent):
                 entities = extract_entities_from_text(text_source)
                 contact_emails.extend(entities.get("emails", []))
                 contact_phones.extend(entities.get("phones", []))
+                contact_domains.extend(entities.get("domains", []))
+                contact_handles.extend(entities.get("handles", []))
 
                 per_page.append(
                     {
@@ -156,6 +160,8 @@ class WebCrawlerAgent(OSINTAgent):
                 "contact_artifacts": {
                     "emails": sorted(set(contact_emails)),
                     "phones": sorted(set(contact_phones)),
+                    "domains": sorted(set(contact_domains)),
+                    "handles": sorted(set(contact_handles)),
                 },
                 "sensitive_paths": sorted(set(sensitive_paths)),
                 "crawl_summary": crawl.get("crawl_summary", {}),

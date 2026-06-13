@@ -48,6 +48,7 @@ class FileRelationshipAgent(OSINTAgent):
                     "name": Path(path).name.lower(),
                     "emails": entities.get("emails", []),
                     "urls": entities.get("urls", []),
+                    "domains": entities.get("domains", []),
                     "phones": entities.get("phones", []),
                 }
                 file_profiles[path] = profile
@@ -76,10 +77,13 @@ class FileRelationshipAgent(OSINTAgent):
 
                     shared_emails = sorted(set(a["emails"]) & set(b["emails"]))
                     shared_urls = sorted(set(a["urls"]) & set(b["urls"]))
+                    shared_domains = sorted(set(a["domains"]) & set(b["domains"]))
                     if shared_emails:
                         reasons.append("shared_email")
                     if shared_urls:
                         reasons.append("shared_url")
+                    if shared_domains:
+                        reasons.append("shared_domain")
 
                     if reasons:
                         related_files.append(
@@ -95,6 +99,7 @@ class FileRelationshipAgent(OSINTAgent):
                                 "pair": [a["path"], b["path"]],
                                 "shared_emails": shared_emails,
                                 "shared_urls": shared_urls,
+                                "shared_domains": shared_domains,
                                 "name_token_overlap": overlap_tokens,
                             }
                         )

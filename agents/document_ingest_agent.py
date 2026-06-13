@@ -73,6 +73,9 @@ class DocumentIngestAgent(OSINTAgent):
             all_emails: List[str] = []
             all_phones: List[str] = []
             all_urls: List[str] = []
+            all_domains: List[str] = []
+            all_ips: List[str] = []
+            all_handles: List[str] = []
             all_dates: List[str] = []
             all_people: List[str] = []
             all_orgs: List[str] = []
@@ -103,6 +106,9 @@ class DocumentIngestAgent(OSINTAgent):
                 all_emails.extend(entities.get("emails", []))
                 all_phones.extend(entities.get("phones", []))
                 all_urls.extend(entities.get("urls", []))
+                all_domains.extend(entities.get("domains", []))
+                all_ips.extend(entities.get("ips", []))
+                all_handles.extend(entities.get("handles", []))
                 all_dates.extend(entities.get("dates", []))
                 all_people.extend(entities.get("suspected_people", []))
                 all_orgs.extend(entities.get("suspected_orgs", []))
@@ -113,6 +119,9 @@ class DocumentIngestAgent(OSINTAgent):
                     "emails": unique_sorted(all_emails),
                     "phones": unique_sorted(all_phones),
                     "urls": unique_sorted(all_urls),
+                    "domains": unique_sorted(all_domains),
+                    "ips": unique_sorted(all_ips),
+                    "handles": unique_sorted(all_handles),
                     "dates": unique_sorted(all_dates),
                     "suspected_people": unique_sorted(all_people),
                     "suspected_orgs": unique_sorted(all_orgs),
@@ -120,6 +129,9 @@ class DocumentIngestAgent(OSINTAgent):
                 "emails": unique_sorted(all_emails),
                 "phones": unique_sorted(all_phones),
                 "urls": unique_sorted(all_urls),
+                "domains": unique_sorted(all_domains),
+                "ips": unique_sorted(all_ips),
+                "handles": unique_sorted(all_handles),
                 "dates": unique_sorted(all_dates),
                 "suspected_people": unique_sorted(all_people),
                 "suspected_orgs": unique_sorted(all_orgs),
@@ -127,7 +139,14 @@ class DocumentIngestAgent(OSINTAgent):
                 "files_processed": len(extracted),
             }
 
-            evidence_count = len(findings["emails"]) + len(findings["phones"]) + len(findings["urls"])
+            evidence_count = (
+                len(findings["emails"])
+                + len(findings["phones"])
+                + len(findings["urls"])
+                + len(findings["domains"])
+                + len(findings["ips"])
+                + len(findings["handles"])
+            )
             risk = min(0.03 + evidence_count * 0.01, 0.55)
             return ok(
                 self.name,

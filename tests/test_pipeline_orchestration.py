@@ -1,7 +1,10 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 from agent_manager import AgentManager
 from agents.base_agent import OSINTAgent
+from core import CheckpointStore, EvidenceLedger, InvestigationDatabase
 
 
 class WebCrawlerAgent(OSINTAgent):
@@ -162,6 +165,23 @@ class ReportBuilderAgent(OSINTAgent):
         }
 
 
+class FileProducingAgent(OSINTAgent):
+    requires_context = True
+
+    def run(self, indicator):
+        ctx = indicator.get("investigation_context", {}) if isinstance(indicator, dict) else {}
+        reports_dir = Path(str(ctx.get("reports_dir", "")))
+        artifact = reports_dir / "collected.txt"
+        artifact.write_text("artifact", encoding="utf-8")
+        return {
+            "status": "ok",
+            "findings": {"downloaded_files": [str(artifact)]},
+            "risk_score": 0.0,
+            "evidence_mode": "collected",
+            "evidence_count": 1,
+        }
+
+
 class PipelineOrchestrationTests(unittest.TestCase):
     def test_quick_pipeline_populates_registries_and_state(self) -> None:
         manager = AgentManager()
@@ -186,6 +206,37 @@ class PipelineOrchestrationTests(unittest.TestCase):
         self.assertGreater(len(manager.entity_registry.to_list()), 0)
         self.assertEqual(manager.pipeline_state.get("pipeline_mode"), "quick")
         self.assertEqual(manager.pipeline_state.get("collection_mode"), "low_noise")
+
+    def test_pipeline_persists_checkpoint_ledger_and_database(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = AgentManager(
+                run_id="run-test-1",
+                checkpoint_store=CheckpointStore(Path(tmp) / "synint_checkpoint.json"),
+                evidence_ledger=EvidenceLedger(Path(tmp) / "chain_of_custody.jsonl"),
+                investigation_db=InvestigationDatabase(Path(tmp) / "investigation.sqlite"),
+            )
+            for cls in [
+                FileProducingAgent,
+                WebCrawlerAgent,
+                ContactDiscoveryAgent,
+                EntityResolutionAgent,
+                RelationshipGraphAgent,
+                TimelineReconstructionAgent,
+                EvidenceScoringAgent,
+                ContradictionDetectionAgent,
+                LeadGenerationAgent,
+                ThreatAnalyzerAgent,
+                ReportBuilderAgent,
+            ]:
+                manager.register_agent(cls())
+
+            results = manager.run_all("example.com", run_reports_dir=tmp, collection_mode="balanced")
+            self.assertIn("FileProducingAgent", results)
+            self.assertTrue((Path(tmp) / "synint_checkpoint.json").exists())
+            self.assertTrue((Path(tmp) / "investigation.sqlite").exists())
+            self.assertTrue((Path(tmp) / "chain_of_custody.jsonl").exists())
+            ledger_text = (Path(tmp) / "chain_of_custody.jsonl").read_text(encoding="utf-8")
+            self.assertIn("collected_file", ledger_text)
 
 
 if __name__ == "__main__":

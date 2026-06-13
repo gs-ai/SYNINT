@@ -1,38 +1,30 @@
 ![SYNINT Logo](docs/assets/synint-logo.png)
 
-# SYNINT v3
+# SYNINT v4
 
-SYNINT is a local-first OSINT investigation framework with staged execution, pluggable collection engines, centralized evidence/entity registries, and structured export reporting.
+SYNINT is a local-first OSINT investigation framework with staged execution, pluggable collection engines, centralized evidence and entity registries, resumable runs, and structured forensic reporting.
 
-## Release Snapshot
+## V4 Highlights
 
-- Full agent suite: 46 agents (canonical order from `agents.AGENT_ORDER`)
+- Full agent suite: 46 agents in canonical order from `agents.AGENT_ORDER`.
 - Execution models:
-  - Concurrent run-all (default)
-  - Staged pipeline (`quick`, `standard`, `deep`)
-- Collection modes:
-  - `low_noise`
-  - `balanced`
-  - `stealth`
-  - `deep_browser`
-- Report outputs per run:
-  - `synint.log`
-  - `synint_report.json`
-  - `synint_report.html`
-  - `collection_artifacts/`
-  - Investigation export bundle (`summary.json`, `report.md`, and related files)
-- Path handling is project-root anchored via `synint_paths.py` for consistent output behavior.
-
-## Release Notes (v3.0.0 - April 12, 2026)
-
-- Major framework refresh for SYNINT v3 with staged pipeline orchestration and concurrent run-all execution.
-- Expanded intelligence coverage to 46 agents spanning collection, entity resolution, history, media forensics, infrastructure pivoting, and synthesis/export.
-- Added multi-engine collector abstraction with graceful fallback across `StaticHttp`, `Scrapling`, `Scrapy`, and `Camoufox`.
-- Improved report generation with per-run artifact directories and structured export bundles (`summary.json`, `evidence_register.csv`, `report.md`, graph/timeline/leads JSON).
-- Hardened runtime path behavior using project-root anchored paths (`synint_paths.py`) for reliable output from different working directories.
-- Refreshed documentation and release packaging for cleaner onboarding and publish readiness.
-
-Full publish-ready release text: [RELEASE_NOTES_v3.0.0.md](RELEASE_NOTES_v3.0.0.md)
+  - Concurrent run-all (default).
+  - Staged pipeline (`quick`, `standard`, `deep`).
+- Forensic runtime hardening:
+  - Append-only chain-of-custody ledger in `chain_of_custody.jsonl`.
+  - Per-agent checkpointing with resume support in `synint_checkpoint.json`.
+  - Strict normalized-result validation before registry and report ingestion.
+  - Local SQLite investigation store in `investigation.sqlite`.
+- Runtime controls:
+  - Manager-level `--agent-timeout` and `--agent-retries`.
+  - Resume support through `--resume-checkpoint`.
+- Reporting:
+  - `synint.log`, `synint_report.json`, and `synint_report.html`.
+  - `collection_artifacts/` plus the investigation export bundle (`summary.json`, `report.md`, and related files).
+  - Forensic metadata paths included in exported reporting.
+- Operational continuity:
+  - Preserves the existing pipeline and run-all flow.
+  - Keeps project-root anchored path handling via `synint_paths.py`.
 
 ## Install
 
@@ -70,6 +62,17 @@ python3 main.py https://target.tld --exclude-agents IDSAgent,MITMAgent
 
 ## Pipeline Execution
 
+Execution behavior:
+
+- `python3 main.py https://target.tld --collection-mode stealth`
+  - Runs the full program in default run-all mode.
+  - Executes all selected agents.
+  - Runs regular agents concurrently, then runs fusion/context-heavy agents in dependency-aware order.
+- `python3 main.py https://target.tld --pipeline --pipeline-mode deep --collection-mode stealth`
+  - Runs the deep staged pipeline only.
+  - Executes only the agents included in the `deep` stage plan.
+  - Preserves stage-by-stage context flow and result propagation between agents.
+
 Standard staged pipeline:
 
 ```bash
@@ -94,6 +97,12 @@ Set collection mode explicitly:
 python3 main.py https://target.tld --pipeline --pipeline-mode deep --collection-mode stealth
 ```
 
+Resume a previous run from its checkpoint:
+
+```bash
+python3 main.py https://target.tld --pipeline --pipeline-mode deep --resume-checkpoint reports/example-06.12.26-1200/synint_checkpoint.json
+```
+
 ## Runtime Knobs
 
 Prefer a collector globally:
@@ -108,10 +117,16 @@ Tune Wayback request bounds:
 SYNINT_WAYMORE_LIMIT_REQUESTS=40 SYNINT_WAYMORE_TIMEOUT=240 python3 main.py https://target.tld
 ```
 
+Set manager-level timeout and retry controls:
+
+```bash
+python3 main.py https://target.tld --agent-timeout 30 --agent-retries 1
+```
+
 Compatibility mode (same as default run-all behavior):
 
 ```bash
-python3 main.py https://target.tld --legacy-run-all
+python3 main.py https://target.tld --legacy-run-all --collection-mode stealth
 ```
 
 ## Reports And Artifacts
@@ -125,6 +140,9 @@ Per-run files:
 - `synint.log`
 - `synint_report.json`
 - `synint_report.html`
+- `synint_checkpoint.json`
+- `chain_of_custody.jsonl`
+- `investigation.sqlite`
 - `collection_artifacts/`
   - `raw_html/`
   - `rendered_html/`
@@ -134,7 +152,7 @@ Per-run files:
   - `extracted_text/`
   - `downloads/`
 
-`ReportBuilderAgent` additionally writes investigation exports (for example `summary.json`, `evidence_register.csv`, `report.md`) into the run directory.
+`ReportBuilderAgent` also writes the investigation export bundle into the run directory and includes the v4 forensic paths in `report.md`.
 
 ## Collector Engines
 
@@ -151,82 +169,82 @@ Missing optional engines degrade gracefully without crashing a run.
 
 | Agent | What It Provides |
 |---|---|
-| `CybintAgent` | Baseline network and security-header reconnaissance for the target. |
-| `SocialMediaAgent` | Public profile and handle discovery across major social platforms. |
-| `WhoisAgent` | WHOIS lookup parsing for registrar and domain registration context. |
-| `IDSAgent` | Local anomaly detection over IDS-like event patterns. |
-| `MITMAgent` | Traffic relationship mapping and suspicious intermediary path signals. |
-| `SIEMAgent` | SIEM-style event clustering and correlated activity grouping. |
-| `TechIntAgent` | Infrastructure and technical exposure profiling of target systems. |
-| `ThreatAnalyzerAgent` | Consolidated risk synthesis across outputs, contradictions, and leads. |
-| `DNSEnumAgent` | DNS record enumeration and basic subdomain posture checks. |
-| `EmailHarvestAgent` | Candidate email artifact generation and scoring. |
-| `MetadataExtractionAgent` | File metadata extraction, hashing, and suspicious naming indicators. |
-| `GitHubIntelAgent` | GitHub target-context enrichment for user/repository intelligence. |
-| `SSLCertAnalysisAgent` | Certificate metadata analysis, trust cues, and expiry risk checks. |
-| `IPReputationAgent` | IP posture classification and local network-context signals. |
-| `DarkWebMonitorAgent` | Local-first breach/dark-web style indicator matching scaffold. |
-| `WaybackAnalysisAgent` | Historical URL discovery through local `waymore` integration. |
-| `JobPostingIntelAgent` | Hiring and capability signal extraction from job-posting text. |
-| `PortfolioMappingAgent` | Related asset mapping from domain and naming relationships. |
-| `BlockchainIntelAgent` | Blockchain address artifact detection with chain hints. |
-| `PhishingDetectionAgent` | Typosquat/permutation and phishing-style lexical risk scoring. |
+| `CybintAgent` | Performs lightweight host reconnaissance including DNS resolution, common-port checks, SSL certificate signals, and security-header observations. |
+| `SocialMediaAgent` | Checks likely public profile URLs across major platforms and classifies discovered, blocked, or ambiguous account results. |
+| `WhoisAgent` | Runs WHOIS lookups for domains or IPs and surfaces registrar, registration, and raw-record context. |
+| `IDSAgent` | Scores IDS-style event payloads for suspicious activity patterns and anomaly-oriented signal clustering. |
+| `MITMAgent` | Analyzes network-path and relay-style indicators for intermediary, interception, or suspicious routing cues. |
+| `SIEMAgent` | Correlates SIEM-like event text using vectorization and clustering to group related security events. |
+| `TechIntAgent` | Collects real host/service observations such as IP resolution, reachable ports, and HTTP technology fingerprints. |
+| `ThreatAnalyzerAgent` | Fuses upstream evidence, entities, contradictions, and leads into a consolidated threat and risk picture. |
+| `DNSEnumAgent` | Enumerates A, AAAA, MX, NS, TXT, SPF, DMARC, DKIM, and common subdomain findings for DNS posture review. |
+| `EmailHarvestAgent` | Generates and scores candidate email artifacts from target naming patterns and discovered text. |
+| `MetadataExtractionAgent` | Extracts file metadata, hashes, naming cues, and basic suspicious-document indicators from local files. |
+| `GitHubIntelAgent` | Enriches investigations with GitHub-oriented username, repository, and public code-surface intelligence. |
+| `SSLCertAnalysisAgent` | Parses live SSL/TLS certificate details including SAN scope, issuer data, expiry state, and wildcard exposure. |
+| `IPReputationAgent` | Classifies IP-oriented risk posture using local heuristics, reserved-range awareness, and basic network context. |
+| `DarkWebMonitorAgent` | Provides local-first dark-web and breach-corpus matching readiness with entropy and target profiling scaffolds. |
+| `WaybackAnalysisAgent` | Uses optional `waymore` integration to gather archived URLs, sensitive historical paths, and historical file exposure leads. |
+| `JobPostingIntelAgent` | Extracts hiring, stack, capability, and organizational signals from job-posting text or collected artifacts. |
+| `PortfolioMappingAgent` | Maps related brands, assets, and naming relationships to expand likely target portfolio coverage. |
+| `BlockchainIntelAgent` | Detects wallet patterns, identifies likely chain families, and prepares blockchain artifacts for downstream enrichment. |
+| `PhishingDetectionAgent` | Scores phishing and typosquat risk through lexical patterns, brand-style spoofing cues, and domain-shape heuristics. |
 
 ### Collection Agents
 
 | Agent | What It Provides |
 |---|---|
-| `WebCrawlerAgent` | Bounded crawl with link graphing, forms, contacts, and artifacts. |
-| `DocumentIngestAgent` | Text extraction and entity parsing from local/downloaded documents. |
-| `ArchiveFileDiscoveryAgent` | Probing of sensitive archive/backup file paths. |
-| `DirectoryBruteAgent` | Curated path probing for admin/login/api/config exposure points. |
-| `SearchEngineDiscoveryAgent` | Indexed-intel parsing from local search exports/corpora. |
+| `WebCrawlerAgent` | Performs bounded crawling with page summaries, link extraction, contact discovery, forms, and collected-file awareness. |
+| `DocumentIngestAgent` | Ingests local or downloaded documents, extracts text, runs metadata extraction, and derives structured entities. |
+| `ArchiveFileDiscoveryAgent` | Probes curated backup, archive, and sensitive file paths with bounded request classification. |
+| `DirectoryBruteAgent` | Checks a small high-value path list for reachable admin, login, config, upload, and staging endpoints. |
+| `SearchEngineDiscoveryAgent` | Parses local search exports or cached corpora to recover indexed URLs, admin-path hints, and mention signals. |
 
 ### Entity And Identity Agents
 
 | Agent | What It Provides |
 |---|---|
-| `ContactDiscoveryAgent` | Contact artifact normalization (emails, phones, addresses, pages). |
-| `UsernameCorrelationAgent` | Username-variant generation and reuse correlation. |
-| `PersonProfileAgent` | Person-centric profile assembly from aliases and source artifacts. |
-| `EntityResolutionAgent` | Deterministic deduplication and confidence-weighted entity merges. |
-| `RelationshipGraphAgent` | Graph-ready node/edge construction with source traceability. |
+| `ContactDiscoveryAgent` | Aggregates and normalizes emails, phones, addresses, and contact pages from prior collection results. |
+| `UsernameCorrelationAgent` | Generates username variants and correlates them against collected text and prior findings. |
+| `PersonProfileAgent` | Builds person-centric profiles from aliases, usernames, contact artifacts, and supporting context. |
+| `EntityResolutionAgent` | Deduplicates and merges entities deterministically with confidence-weighted normalization and source attribution. |
+| `RelationshipGraphAgent` | Converts resolved entities and pivots into graph-ready nodes and edges with traceable relationships. |
 
 ### Timeline And History Agents
 
 | Agent | What It Provides |
 |---|---|
-| `TimelineReconstructionAgent` | Timestamp normalization into chronological investigation timelines. |
-| `HistoricalDNSAgent` | Current vs historical DNS posture comparison from local snapshots. |
-| `DomainRegistrationPatternAgent` | Registrar/TLD/age pattern analysis for campaign-style similarity. |
+| `TimelineReconstructionAgent` | Normalizes temporal tokens from multi-agent findings into an ISO-ordered investigation timeline. |
+| `HistoricalDNSAgent` | Compares current and historical DNS-oriented findings to surface hosting and resolution change patterns. |
+| `DomainRegistrationPatternAgent` | Analyzes registrar, TLD, age, and registration-pattern similarities for campaign-style clustering. |
 
 ### File And Media Agents
 
 | Agent | What It Provides |
 |---|---|
-| `OCRIngestAgent` | OCR text extraction from images when OCR tooling is available. |
-| `ImageForensicsAgent` | Image fingerprinting, EXIF extraction, and lightweight forensic flags. |
-| `TranscriptExtractionAgent` | Transcript parsing for entities, contradictions, and escalation cues. |
-| `FileRelationshipAgent` | Cross-file correlation by hash, metadata, naming, and extracted entities. |
+| `OCRIngestAgent` | Extracts OCR text from images and image-based documents when local OCR tooling is available. |
+| `ImageForensicsAgent` | Produces image hashes, EXIF-derived context, and lightweight tamper or anomaly indicators. |
+| `TranscriptExtractionAgent` | Parses transcript-style text for speakers, entities, timeline cues, and contradiction-relevant statements. |
+| `FileRelationshipAgent` | Correlates files by hashes, metadata, naming conventions, and extracted entity overlap. |
 
 ### Infrastructure And Pivot Agents
 
 | Agent | What It Provides |
 |---|---|
-| `HostFingerprintAgent` | Deterministic host fingerprints and certificate/SAN pivot hints. |
-| `ServiceBannerAgent` | Bounded banner collection across selected network services. |
-| `CertificatePivotAgent` | Certificate CN/SAN pivoting into related domain hypotheses. |
-| `ContentSimilarityAgent` | Content/template similarity clustering across collected assets. |
-| `InfrastructureClusterAgent` | Evidence-based infrastructure clustering with explicit reason codes. |
+| `HostFingerprintAgent` | Builds deterministic host fingerprints from observed services, certificates, and resolved infrastructure cues. |
+| `ServiceBannerAgent` | Collects small-scope network service banners from curated ports for quick infrastructure profiling. |
+| `CertificatePivotAgent` | Pivots from SSL findings into SAN, wildcard, and certificate-scope related-domain hypotheses. |
+| `ContentSimilarityAgent` | Compares collected textual content to detect template reuse, cloning, or strong similarity overlap. |
+| `InfrastructureClusterAgent` | Groups related infrastructure using evidence-backed clustering logic and explicit reason annotations. |
 
 ### Synthesis And Export Agents
 
 | Agent | What It Provides |
 |---|---|
-| `EvidenceScoringAgent` | Evidence tiering and confidence scoring normalization. |
-| `ContradictionDetectionAgent` | Cross-source contradiction detection with citation-friendly outputs. |
-| `LeadGenerationAgent` | Prioritized next-step investigative lead generation. |
-| `ReportBuilderAgent` | Final markdown/JSON/CSV export bundle generation. |
+| `EvidenceScoringAgent` | Assigns evidence tiers, confidence levels, and collection-value distinctions across prior agent outputs. |
+| `ContradictionDetectionAgent` | Detects cross-source conflicts in ownership, location, hostname, and timeline-related findings. |
+| `LeadGenerationAgent` | Produces prioritized next-step investigative leads from high-value findings, gaps, and contradictions. |
+| `ReportBuilderAgent` | Writes the final markdown, JSON, CSV, graph, timeline, and lead export bundle for the run. |
 
 ## Testing
 

@@ -21,6 +21,8 @@ class InvestigationContext:
     collected_evidence: List[Dict[str, Any]] = field(default_factory=list)
     runtime_notes: List[str] = field(default_factory=list)
     collection_mode: str = "standard"
+    case_name: str = ""
+    run_id: str = ""
 
     @classmethod
     def from_target(cls, target: str, collection_mode: str = "standard") -> "InvestigationContext":
@@ -32,6 +34,24 @@ class InvestigationContext:
             normalized_target=normalized,
             target_type=primary_type,
             collection_mode=collection_mode,
+        )
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "InvestigationContext":
+        return cls(
+            original_target=str(payload.get("original_target", "")),
+            normalized_target=str(payload.get("normalized_target", "")),
+            target_type=str(payload.get("target_type", "text")),
+            resolved_ips=[str(item) for item in payload.get("resolved_ips", []) if str(item).strip()],
+            resolved_domains=[str(item) for item in payload.get("resolved_domains", []) if str(item).strip()],
+            collected_urls=[str(item) for item in payload.get("collected_urls", []) if str(item).strip()],
+            collected_files=[str(item) for item in payload.get("collected_files", []) if str(item).strip()],
+            collected_entities=list(payload.get("collected_entities", [])),
+            collected_evidence=list(payload.get("collected_evidence", [])),
+            runtime_notes=[str(item) for item in payload.get("runtime_notes", []) if str(item).strip()],
+            collection_mode=str(payload.get("collection_mode", "standard")),
+            case_name=str(payload.get("case_name", "")),
+            run_id=str(payload.get("run_id", "")),
         )
 
     def add_url(self, url: str) -> None:
@@ -59,4 +79,6 @@ class InvestigationContext:
             "collected_evidence": self.collected_evidence,
             "runtime_notes": self.runtime_notes,
             "collection_mode": self.collection_mode,
+            "case_name": self.case_name,
+            "run_id": self.run_id,
         }

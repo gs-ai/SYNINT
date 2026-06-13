@@ -161,7 +161,15 @@ class AnalysisAndExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = write_export_bundle(
                 base_output_dir=Path(tmp),
-                context={"original_target": "example.com", "normalized_target": "example.com", "collection_mode": "balanced"},
+                context={
+                    "original_target": "example.com",
+                    "normalized_target": "example.com",
+                    "collection_mode": "balanced",
+                    "run_id": "run-test-1",
+                    "forensic_ledger_path": "/tmp/chain_of_custody.jsonl",
+                    "checkpoint_path": "/tmp/synint_checkpoint.json",
+                    "investigation_db_path": "/tmp/investigation.sqlite",
+                },
                 summary={"agent_count": 3, "evidence_count": 1, "entity_count": 1, "timeline_count": 1, "lead_count": 1},
                 evidence=[
                     {
@@ -208,6 +216,7 @@ class AnalysisAndExportTests(unittest.TestCase):
             self.assertIn("CASE / TARGET OVERVIEW", report_text)
             self.assertIn("EXECUTIVE SUMMARY", report_text)
             self.assertIn("AGENT EXECUTION SUMMARY", report_text)
+            self.assertIn("chain_of_custody.jsonl", report_text)
 
 
 if __name__ == "__main__":

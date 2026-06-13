@@ -56,7 +56,9 @@ class SearchEngineDiscoveryAgent(OSINTAgent):
                 text = str(extracted.get("text", ""))
                 entities = extract_entities_from_text(text)
                 urls = entities.get("urls", [])
+                domains = entities.get("domains", [])
                 indexed_documents.extend(urls)
+                indexed_documents.extend(f"https://{domain}" for domain in domains if domain)
 
                 for line in text.splitlines():
                     lowered = line.lower()
@@ -77,6 +79,7 @@ class SearchEngineDiscoveryAgent(OSINTAgent):
                     "extractor": extracted.get("extractor"),
                     "char_count": extracted.get("char_count", 0),
                     "url_count": len(urls),
+                    "domain_count": len(domains),
                 }
 
             findings = {

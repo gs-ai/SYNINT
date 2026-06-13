@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI entrypoint for SYNINT v3 pipeline execution and reporting."""
+"""CLI entrypoint for SYNINT v4 pipeline execution and reporting."""
 
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ from typing import Any, Dict, Sequence
 from urllib.parse import urlparse
 
 from agent_manager import AgentManager
+from agent_manager import RuntimePolicy
 from agents import AGENT_ORDER, available_agent_names, load_agent_classes
+from core import CheckpointStore, EvidenceLedger, InvestigationDatabase
 from runtime_fingerprint import build_run_metadata
 from synint_paths import REPORTS_DIR
 
@@ -25,6 +27,9 @@ REPORTS_ROOT = REPORTS_DIR
 REPORT_JSON_NAME = "synint_report.json"
 REPORT_HTML_NAME = "synint_report.html"
 LOG_FILE_NAME = "synint.log"
+CHECKPOINT_FILE_NAME = "synint_checkpoint.json"
+LEDGER_FILE_NAME = "chain_of_custody.jsonl"
+INVESTIGATION_DB_NAME = "investigation.sqlite"
 
 
 def _configure_logging(log_file: Path | None = None) -> None:
@@ -145,6 +150,12 @@ def build_report_payload(
         {"agent": name, "risk_score": score}
         for name, score in sorted(risk_scores.items(), key=lambda item: item[1], reverse=True)[:5]
     ]
+    pipeline_snapshot = pipeline_state or {}
+    forensic_summary = {
+        "ledger_path": pipeline_snapshot.get("forensic_ledger_path", ""),
+        "checkpoint_path": pipeline_snapshot.get("checkpoint_path", ""),
+        "investigation_db_path": pipeline_snapshot.get("investigation_db_path", ""),
+    }
 
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -165,8 +176,9 @@ def build_report_payload(
             "max_risk_score": max_risk,
             "top_risk_agents": top_risk_agents,
         },
+        "forensic_summary": forensic_summary,
         "run_metadata": run_metadata,
-        "pipeline_state": pipeline_state or {},
+        "pipeline_state": pipeline_snapshot,
         "results": results,
     }
 
@@ -255,6 +267,11 @@ def generate_html_report(report: Dict[str, Any], filename: Path = REPORTS_ROOT /
             + escape(json.dumps(risk_summary, sort_keys=True))
             + "</p>\n"
         )
+        html_parts.append(
+            "    <p><strong>Forensic Summary:</strong> "
+            + escape(json.dumps(report.get("forensic_summary", {}), sort_keys=True))
+            + "</p>\n"
+        )
 
         html_parts.append("    <button onclick=\"downloadJSON()\">Download JSON Report</button>\n")
         html_parts.append("    <h2>RUN_METADATA</h2>\n")
@@ -336,6 +353,28 @@ def generate_html_report(report: Dict[str, Any], filename: Path = REPORTS_ROOT /
         logger.exception("Failed to generate HTML report: %s", exc)
 
 
+def _record_runtime_artifact(
+    *,
+    ledger: EvidenceLedger | None,
+    database: InvestigationDatabase | None,
+    run_id: str,
+    event_type: str,
+    artifact_path: Path,
+    source_reference: str,
+) -> None:
+    if ledger is None or not run_id:
+        return
+    entry = ledger.append_artifact(
+        run_id=run_id,
+        event_type=event_type,
+        artifact_path=artifact_path,
+        source_agent="main",
+        source_reference=source_reference,
+    )
+    if entry is not None and database is not None:
+        database.record_artifact(run_id, entry.__dict__)
+
+
 def _parse_agent_name_csv(raw: str) -> set[str]:
     return {part.strip() for part in raw.split(",") if part.strip()}
 
@@ -399,6 +438,23 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Deprecated compatibility flag; default already runs all selected agents",
     )
+    parser.add_argument(
+        "--resume-checkpoint",
+        default="",
+        help="Resume a prior run from the given checkpoint JSON path",
+    )
+    parser.add_argument(
+        "--agent-timeout",
+        type=float,
+        default=0.0,
+        help="Per-agent timeout in seconds (0 disables timeout enforcement)",
+    )
+    parser.add_argument(
+        "--agent-retries",
+        type=int,
+        default=0,
+        help="Per-agent retry count after a failure or timeout",
+    )
     return parser
 
 
@@ -412,7 +468,7 @@ def main() -> None:
     parser = _build_arg_parser()
     args = parser.parse_args()
     logger.info(
-        "SYNINT invoked (target=%s, list_agents=%s, include=%s, exclude=%s, pipeline=%s, pipeline_mode=%s, legacy=%s)",
+        "SYNINT invoked (target=%s, list_agents=%s, include=%s, exclude=%s, pipeline=%s, pipeline_mode=%s, legacy=%s, resume=%s)",
         args.target,
         args.list_agents,
         bool(str(args.agents).strip()),
@@ -420,6 +476,7 @@ def main() -> None:
         args.pipeline,
         args.pipeline_mode,
         args.legacy_run_all,
+        bool(str(args.resume_checkpoint).strip()),
     )
 
     if args.list_agents:
@@ -434,7 +491,14 @@ def main() -> None:
         sys.exit(1)
 
     target = args.target
-    run_reports_dir = _create_run_reports_dir(target)
+    resume_checkpoint = Path(str(args.resume_checkpoint).strip()).expanduser() if str(args.resume_checkpoint).strip() else None
+    if resume_checkpoint is not None:
+        if not resume_checkpoint.exists():
+            logger.error("Resume checkpoint not found: %s", resume_checkpoint)
+            sys.exit(1)
+        run_reports_dir = resume_checkpoint.resolve().parent
+    else:
+        run_reports_dir = _create_run_reports_dir(target)
     log_file = run_reports_dir / LOG_FILE_NAME
     _configure_logging(log_file)
     logger.info("Run reports directory initialized at %s", run_reports_dir)
@@ -456,7 +520,23 @@ def main() -> None:
     results: Dict[str, Dict[str, Any]] = {}
 
     try:
-        manager = AgentManager()
+        checkpoint_store = CheckpointStore(resume_checkpoint or (run_reports_dir / CHECKPOINT_FILE_NAME))
+        resume_payload = checkpoint_store.load() if resume_checkpoint is not None else {}
+        run_metadata = build_run_metadata(dependency_snapshot_file=run_reports_dir / "runtime_pip_freeze.txt")
+        if isinstance(resume_payload, dict) and str(resume_payload.get("run_id", "")).strip():
+            run_metadata["run_id"] = str(resume_payload.get("run_id"))
+        evidence_ledger = EvidenceLedger(run_reports_dir / LEDGER_FILE_NAME)
+        investigation_db = InvestigationDatabase(run_reports_dir / INVESTIGATION_DB_NAME)
+        manager = AgentManager(
+            run_id=str(run_metadata.get("run_id", "")),
+            checkpoint_store=checkpoint_store,
+            evidence_ledger=evidence_ledger,
+            investigation_db=investigation_db,
+            runtime_policy=RuntimePolicy(
+                timeout_seconds=max(0.0, float(args.agent_timeout or 0.0)),
+                max_retries=max(0, int(args.agent_retries or 0)),
+            ),
+        )
         selected_agent_classes = load_agent_classes(selected_agent_names)
         for agent_cls in selected_agent_classes:
             manager.register_agent(agent_cls())
@@ -467,7 +547,12 @@ def main() -> None:
         execution_model = "pipeline" if use_pipeline else "legacy_run_all"
         collection_mode_override = str(args.collection_mode).strip() or None
         run_collection_mode = collection_mode_override or "balanced"
-        run_metadata = build_run_metadata()
+        run_metadata["checkpoint_path"] = str(checkpoint_store.path.resolve())
+        run_metadata["forensic_ledger_path"] = str(evidence_ledger.ledger_path.resolve())
+        run_metadata["investigation_db_path"] = str(investigation_db.path.resolve())
+        run_metadata["agent_timeout_seconds"] = max(0.0, float(args.agent_timeout or 0.0))
+        run_metadata["agent_retries"] = max(0, int(args.agent_retries or 0))
+        run_metadata["resumed_from_checkpoint"] = str(resume_checkpoint.resolve()) if resume_checkpoint is not None else None
         last_progress_report = 0.0
         progress_interval_seconds = 20.0
 
@@ -487,12 +572,28 @@ def main() -> None:
                 execution_model=execution_model,
                 pipeline_mode=args.pipeline_mode if use_pipeline else None,
                 collection_mode=(manager.pipeline_state or {}).get("collection_mode") or run_collection_mode,
-                pipeline_state=manager.pipeline_state if use_pipeline else None,
+                pipeline_state=manager.pipeline_state or None,
                 expected_total_agents=len(selected_agent_names),
                 report_phase="complete" if str(payload.get("phase")) == "complete" else "in_progress",
             )
             generate_json_report(snapshot, report_json_path)
             generate_html_report(snapshot, report_html_path)
+            _record_runtime_artifact(
+                ledger=evidence_ledger,
+                database=investigation_db,
+                run_id=str(run_metadata.get("run_id", "")),
+                event_type="report_snapshot_json",
+                artifact_path=report_json_path,
+                source_reference="synint_report.json",
+            )
+            _record_runtime_artifact(
+                ledger=evidence_ledger,
+                database=investigation_db,
+                run_id=str(run_metadata.get("run_id", "")),
+                event_type="report_snapshot_html",
+                artifact_path=report_html_path,
+                source_reference="synint_report.html",
+            )
             last_progress_report = now
             logger.info(
                 "Progress report snapshot saved (agents=%d, stage=%s, phase=%s).",
@@ -537,7 +638,7 @@ def main() -> None:
             execution_model=execution_model,
             pipeline_mode=args.pipeline_mode if use_pipeline else None,
             collection_mode=(manager.pipeline_state or {}).get("collection_mode") or run_collection_mode,
-            pipeline_state=manager.pipeline_state if use_pipeline else None,
+            pipeline_state=manager.pipeline_state or None,
             expected_total_agents=len(selected_agent_names),
             report_phase="complete",
         )
@@ -545,6 +646,22 @@ def main() -> None:
         print(json.dumps(results, indent=4))
         generate_json_report(report, report_json_path)
         generate_html_report(report, report_html_path)
+        _record_runtime_artifact(
+            ledger=evidence_ledger,
+            database=investigation_db,
+            run_id=str(run_metadata.get("run_id", "")),
+            event_type="final_report_json",
+            artifact_path=report_json_path,
+            source_reference="synint_report.json",
+        )
+        _record_runtime_artifact(
+            ledger=evidence_ledger,
+            database=investigation_db,
+            run_id=str(run_metadata.get("run_id", "")),
+            event_type="final_report_html",
+            artifact_path=report_html_path,
+            source_reference="synint_report.html",
+        )
         logger.info("Execution log persisted to %s", log_file)
 
         report_builder_result = results.get("ReportBuilderAgent", {}).get("result", {})

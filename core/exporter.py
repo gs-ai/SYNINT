@@ -120,6 +120,14 @@ def _build_markdown_report(
 
     lines.append("# APPENDIX")
     lines.append("- Export files: `summary.json`, `evidence_register.csv`, `timeline.json`, `entities.json`, `graph.json`, `leads.json`, `report.md`.")
+    if context.get("run_id"):
+        lines.append(f"- Run ID: `{context.get('run_id')}`")
+    if context.get("forensic_ledger_path"):
+        lines.append(f"- Chain-of-custody ledger: `{context.get('forensic_ledger_path')}`")
+    if context.get("checkpoint_path"):
+        lines.append(f"- Checkpoint: `{context.get('checkpoint_path')}`")
+    if context.get("investigation_db_path"):
+        lines.append(f"- Investigation DB: `{context.get('investigation_db_path')}`")
     lines.append(f"- Generated UTC: {datetime.now(timezone.utc).isoformat()}")
     lines.append("")
 
