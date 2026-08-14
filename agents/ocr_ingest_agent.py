@@ -65,14 +65,18 @@ class OCRIngestAgent(OSINTAgent):
             pytesseract_module = None
             image_module = None
             backend = "none"
-            try:
-                import pytesseract as pytesseract_module  # type: ignore
-                from PIL import Image as image_module  # type: ignore
-                backend = "pytesseract"
-            except Exception:
-                pytesseract_module = None
-                image_module = None
-                if shutil.which("tesseract"):
+            # pytesseract is only a Python wrapper; the system executable is
+            # still required. Resolve it first so an installed wrapper is not
+            # reported as a working OCR backend on its own.
+            tesseract_binary = shutil.which("tesseract")
+            if tesseract_binary:
+                try:
+                    import pytesseract as pytesseract_module  # type: ignore
+                    from PIL import Image as image_module  # type: ignore
+                    backend = "pytesseract"
+                except Exception:
+                    pytesseract_module = None
+                    image_module = None
                     backend = "tesseract_cli"
 
             extracted_text: List[Dict[str, Any]] = []
@@ -86,13 +90,20 @@ class OCRIngestAgent(OSINTAgent):
                 "dates": [],
             }
             unreadable_images: List[str] = []
+            image_errors: List[Dict[str, str]] = []
 
             for image_path in images:
                 text = ""
-                if backend == "pytesseract" and pytesseract_module is not None and image_module is not None:
-                    text = pytesseract_module.image_to_string(image_module.open(image_path))
-                elif backend == "tesseract_cli":
-                    text = self._ocr_via_tesseract_cli(image_path)
+                try:
+                    if backend == "pytesseract" and pytesseract_module is not None and image_module is not None:
+                        # Close image resources deterministically, including
+                        # when decoding or OCR fails for an individual file.
+                        with image_module.open(image_path) as image:
+                            text = pytesseract_module.image_to_string(image)
+                    elif backend == "tesseract_cli":
+                        text = self._ocr_via_tesseract_cli(image_path)
+                except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+                    image_errors.append({"path": image_path, "error": str(exc)})
 
                 entities = extract_entities_from_text(text)
                 if not text.strip():
@@ -116,6 +127,7 @@ class OCRIngestAgent(OSINTAgent):
                 "ocr_backend": backend,
                 "ocr_available": backend != "none",
                 "unreadable_images": unique_sorted(unreadable_images),
+                "image_errors": image_errors,
                 "confidence_notes": [
                     "OCR confidence can vary by image quality and language support.",
                     "Image discovery includes downloaded files and collector screenshots when available.",

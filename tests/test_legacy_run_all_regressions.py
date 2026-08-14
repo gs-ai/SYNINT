@@ -240,6 +240,8 @@ class LegacyRunAllRegressionTests(unittest.TestCase):
             entities_text = entities_json.read_text(encoding="utf-8")
             self.assertIn("ops@example.com", entities_text)
             summary_payload = __import__("json").loads(summary_json.read_text(encoding="utf-8"))
+            self.assertEqual(summary_payload.get("product"), "SYNINT v5")
+            self.assertEqual(summary_payload.get("synint_version"), "5.0.0")
             self.assertEqual(summary_payload.get("agent_count"), len(agent_results) + 1)
 
 

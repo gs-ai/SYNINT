@@ -7,6 +7,7 @@ import random
 import time
 from typing import Any, Dict
 
+from core.redaction import redact_url_credentials
 from .base import BaseCollector, CollectionResult, CollectorCapabilities
 from .utils import (
     create_safe_session,
@@ -85,7 +86,7 @@ class ScraplingCollector(BaseCollector):
                     if isinstance(title, str) and title.strip():
                         summary["title"] = title.strip()
         except Exception as exc:
-            error = str(exc)
+            error = redact_url_credentials(exc)
 
         summary = summary if isinstance(summary, dict) else {}
         summary["cloudflare"] = detect_cloudflare_challenge(

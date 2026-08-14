@@ -37,7 +37,9 @@ class WaybackWaymoreAgentTests(unittest.TestCase):
             json=lambda: [["original", "statuscode", "mimetype", "timestamp"], ["https://example.com/archive", "200", "text/html", "20240101"]],
         )
         with (
-            patch("agents.wayback_analysis.shutil.which", return_value=""),
+            # Mock the agent boundary so an installed sibling venv executable
+            # can never turn this unit test into a live external invocation.
+            patch.object(WaybackAnalysisAgent, "_waymore_binary", return_value=""),
             patch("agents.wayback_analysis.requests.get", return_value=fake_response),
         ):
             result = WaybackAnalysisAgent().run(payload)

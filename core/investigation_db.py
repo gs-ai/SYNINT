@@ -1,4 +1,4 @@
-"""Local SQLite storage for SYNINT v4 investigations."""
+"""Local SQLite storage for SYNINT v5 investigations."""
 
 from __future__ import annotations
 

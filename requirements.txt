@@ -19,3 +19,4 @@ camoufox
 scrapy
 scrapling
 waymore
+warcio

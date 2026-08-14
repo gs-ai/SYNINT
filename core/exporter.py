@@ -1,4 +1,4 @@
-"""Export layer for SYNINT investigation artifacts."""
+"""Export layer for SYNINT v5 investigation artifacts."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
+
+from synint_version import SYNINT_RELEASE, SYNINT_VERSION
 
 
 def _safe_json_dump(path: Path, payload: Any) -> None:
@@ -27,6 +29,10 @@ def _build_markdown_report(
     agent_results: Dict[str, Any],
 ) -> str:
     lines: List[str] = []
+
+    lines.append(f"# {SYNINT_RELEASE} INVESTIGATION REPORT")
+    lines.append(f"- Product Version: `{SYNINT_VERSION}`")
+    lines.append("")
 
     lines.append("# CASE / TARGET OVERVIEW")
     lines.append(f"- Target: `{context.get('original_target', '')}`")

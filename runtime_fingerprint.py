@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Utilities for collecting runtime metadata for SYNINT reports."""
+"""Utilities for collecting runtime metadata for SYNINT v5 reports."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any, Dict
 from uuid import uuid4
 
+from core.redaction import redact_url_credentials
 from synint_paths import REPORTS_DIR
+from synint_version import SYNINT_RELEASE, SYNINT_VERSION
 
 
 def _run_command(command: list[str], timeout: int = 10) -> str:
@@ -34,6 +36,8 @@ def build_run_metadata(
 ) -> Dict[str, Any]:
     """Build a runtime metadata payload for report stamping."""
     metadata: Dict[str, Any] = {
+        "product": SYNINT_RELEASE,
+        "synint_version": SYNINT_VERSION,
         "run_id": str(uuid4()),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_commit_hash": _run_command(["git", "rev-parse", "HEAD"]) or "unknown",
@@ -42,7 +46,9 @@ def build_run_metadata(
     }
 
     if dependency_snapshot_file:
-        freeze_output = _run_command([sys.executable, "-m", "pip", "freeze"], timeout=30)
+        freeze_output = redact_url_credentials(
+            _run_command([sys.executable, "-m", "pip", "freeze"], timeout=30)
+        )
         if freeze_output:
             snapshot_path = Path(dependency_snapshot_file).expanduser()
             if not snapshot_path.is_absolute():

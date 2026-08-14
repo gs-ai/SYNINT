@@ -6,6 +6,7 @@ from agents.social_media_agent import SocialMediaAgent
 from collectors.base import CollectionConfig
 from collectors.static_http import StaticHttpCollector
 from collectors.utils import create_safe_session, normalize_url
+from core.redaction import redact_url_credentials, redact_values
 
 
 class PrivacyGuardTests(unittest.TestCase):
@@ -36,6 +37,19 @@ class PrivacyGuardTests(unittest.TestCase):
         agent = SocialMediaAgent()
         ua = str(agent._get_session().headers.get("User-Agent", ""))
         self.assertNotIn("SYNINT", ua.upper())
+
+    def test_url_credentials_are_redacted_from_diagnostics(self) -> None:
+        message = "proxy failed: https://alice:secret@example.com:8443"
+        redacted = redact_url_credentials(message)
+        self.assertNotIn("alice:secret", redacted)
+        self.assertIn("https://[REDACTED]@example.com:8443", redacted)
+
+    def test_raw_and_encoded_secret_values_are_redacted(self) -> None:
+        secret = "token/with reserved"
+        message = "raw=token/with reserved encoded=token%2Fwith%20reserved"
+        redacted = redact_values(message, [secret])
+        self.assertNotIn(secret, redacted)
+        self.assertNotIn("token%2Fwith%20reserved", redacted)
 
 
 if __name__ == "__main__":

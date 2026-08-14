@@ -7,7 +7,8 @@ from typing import Any, Dict, List
 
 from agents.base_agent import OSINTAgent
 from core.document_utils import extract_text_from_file
-from core.entity_utils import extract_entities_from_text
+from core.entity_utils import extract_entities_enhanced, extract_entities_from_text
+from core.schemas import utc_now_iso
 from ._pipeline import unpack_pipeline_input, unique_sorted
 from .metadata_extraction import MetadataExtractionAgent
 from ._shared import ok, skipped, structured_error
@@ -79,6 +80,9 @@ class DocumentIngestAgent(OSINTAgent):
             all_dates: List[str] = []
             all_people: List[str] = []
             all_orgs: List[str] = []
+            document_relationships: List[Dict[str, Any]] = []
+            enhanced_enabled = bool(context.get("enhanced_extraction"))
+            enhanced_results: List[Dict[str, Any]] = []
 
             metadata_agent = MetadataExtractionAgent()
             for path in files:
@@ -89,8 +93,37 @@ class DocumentIngestAgent(OSINTAgent):
 
                 text = str(file_data.get("text", ""))
                 entities = extract_entities_from_text(text)
+                if enhanced_enabled:
+                    enhanced = extract_entities_enhanced(text)
+                    enhanced_results.append(
+                        {
+                            "path": path,
+                            "bitcoin_wallets": enhanced["bitcoin_wallets"],
+                            "ethereum_wallets": enhanced["ethereum_wallets"],
+                            "uuids": enhanced["uuids"],
+                            "ssn_like_redacted": enhanced["ssn_like_redacted"],
+                        }
+                    )
                 metadata_result = metadata_agent.run(path)
                 metadata_findings = metadata_result.get("findings", {}) if isinstance(metadata_result, dict) else {}
+                forensics = metadata_findings.get("document_forensics", {}) if isinstance(metadata_findings, dict) else {}
+                forensic_text = "\n".join(
+                    str(value)
+                    for value in [
+                        forensics.get("embedded_urls", []),
+                        forensics.get("metadata", {}),
+                    ]
+                )
+                forensic_entities = extract_entities_from_text(forensic_text)
+                for url in forensics.get("embedded_urls", []) if isinstance(forensics, dict) else []:
+                    document_relationships.append(
+                        {
+                            "source_path": path,
+                            "target": url,
+                            "relationship_type": "DOCUMENT_LINKS_TO",
+                            "source_sha256": metadata_findings.get("sha256"),
+                        }
+                    )
 
                 extracted.append(
                     {
@@ -100,6 +133,14 @@ class DocumentIngestAgent(OSINTAgent):
                         "char_count": file_data.get("char_count", 0),
                         "entity_counts": {k: len(v) for k, v in entities.items() if isinstance(v, list)},
                         "file_intel": metadata_findings,
+                        "source_path": path,
+                        "source_sha256": metadata_findings.get("sha256"),
+                        "analysis_timestamp": forensics.get("analysis_timestamp") or utc_now_iso(),
+                        "provenance": metadata_findings.get("provenance", {}),
+                        "document_forensics": forensics,
+                        # Enhanced metadata extraction is separate so established
+                        # detected_entities output remains backward compatible.
+                        "forensic_entities": forensic_entities,
                     }
                 )
 
@@ -136,6 +177,12 @@ class DocumentIngestAgent(OSINTAgent):
                 "suspected_people": unique_sorted(all_people),
                 "suspected_orgs": unique_sorted(all_orgs),
                 "file_intel": extracted,
+                "document_relationships": document_relationships,
+                "enhanced_extraction": {
+                    "enabled": enhanced_enabled,
+                    "results": enhanced_results,
+                    "legacy_entities_unchanged": True,
+                },
                 "files_processed": len(extracted),
             }
 

@@ -213,6 +213,8 @@ class AnalysisAndExportTests(unittest.TestCase):
                 self.assertTrue(Path(out[key]).exists(), f"{key} missing")
 
             report_text = Path(out["report_md"]).read_text(encoding="utf-8")
+            self.assertIn("SYNINT v5 INVESTIGATION REPORT", report_text)
+            self.assertIn("Product Version: `5.0.0`", report_text)
             self.assertIn("CASE / TARGET OVERVIEW", report_text)
             self.assertIn("EXECUTIVE SUMMARY", report_text)
             self.assertIn("AGENT EXECUTION SUMMARY", report_text)

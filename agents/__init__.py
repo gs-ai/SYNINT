@@ -55,6 +55,9 @@ AGENT_IMPORT_PATHS: Dict[str, str] = {
     "ContradictionDetectionAgent": ".contradiction_detection_agent",
     "LeadGenerationAgent": ".lead_generation_agent",
     "ReportBuilderAgent": ".report_builder_agent",
+    "CommonCrawlIngestAgent": ".commoncrawl_ingest_agent",
+    "MachineDiscoveryAgent": ".machine_discovery_agent",
+    "IdentityCandidateAgent": ".identity_candidate_agent",
 }
 
 AGENT_ORDER: Sequence[str] = (
@@ -106,10 +109,20 @@ AGENT_ORDER: Sequence[str] = (
     "ReportBuilderAgent",
 )
 
+# Agents that are fully selectable via --agents but never run as part of the
+# default run-all/pipeline set. Operators opt in explicitly, for example with
+# `--agents CommonCrawlIngestAgent`.
+OPTIONAL_AGENT_ORDER: Sequence[str] = (
+    "CommonCrawlIngestAgent",
+    "MachineDiscoveryAgent",
+    "IdentityCandidateAgent",
+)
+
 
 def available_agent_names() -> Sequence[str]:
-    """Return known agent class names without importing heavy dependencies."""
-    return AGENT_ORDER
+    """Return all known agent class names (default + optional), without
+    importing heavy dependencies."""
+    return tuple(AGENT_ORDER) + tuple(OPTIONAL_AGENT_ORDER)
 
 
 def load_agent_class(agent_name: str) -> Type[OSINTAgent]:
@@ -150,10 +163,12 @@ def __dir__() -> List[str]:
 __all__ = [
     "AGENT_IMPORT_PATHS",
     "AGENT_ORDER",
+    "OPTIONAL_AGENT_ORDER",
     "available_agent_names",
     "load_agent_class",
     "load_agent_classes",
     "build_default_agents",
     "OSINTAgent",
     *AGENT_ORDER,
+    *OPTIONAL_AGENT_ORDER,
 ]
