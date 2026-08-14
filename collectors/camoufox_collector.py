@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib
 from typing import Any, Dict
 
+from core.redaction import redact_url_credentials
 from .base import BaseCollector, CollectionResult, CollectorCapabilities
 from .utils import detect_cloudflare_challenge, normalize_url, parse_html_summary, write_collection_artifacts
 
@@ -41,6 +42,18 @@ class CamoufoxCollector(BaseCollector):
             return None
         return "camoufox package not installed"
 
+    def _launch_options(self) -> Dict[str, Any]:
+        """Expose privacy options that are safe for bounded browser collection.
+
+        Enhanced fingerprint behavior is confined to the already opt-in
+        stealth/deep-browser modes. Image/resource blocking was rejected because
+        blocking it can prevent navigation completion.
+        """
+        options: Dict[str, Any] = {"headless": True}
+        if self.config.mode in {"stealth", "deep_browser"}:
+            options.update({"block_webrtc": True, "humanize": 1.0})
+        return options
+
     def fetch(self, url: str, *, need_render: bool = False) -> CollectionResult:
         normalized = normalize_url(url)
         if not self.is_available():
@@ -72,7 +85,7 @@ class CamoufoxCollector(BaseCollector):
             if camoufox_ctx is None:
                 raise RuntimeError("camoufox sync API is unavailable")
 
-            with camoufox_ctx(headless=True) as browser:
+            with camoufox_ctx(**self._launch_options()) as browser:
                 context_kwargs: Dict[str, Any] = {}
                 if self.config.proxy_url:
                     context_kwargs["proxy"] = {"server": self.config.proxy_url}
@@ -94,7 +107,7 @@ class CamoufoxCollector(BaseCollector):
                     screenshot_bytes = page.screenshot(full_page=True)
                 context.close()
         except Exception as exc:
-            error = str(exc)
+            error = redact_url_credentials(exc)
 
         artifact_paths = {}
         if self.config.save_artifacts:

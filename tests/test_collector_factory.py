@@ -2,6 +2,8 @@ import unittest
 from unittest.mock import patch
 
 from collectors.factory import collector_capability_matrix, select_collector
+from collectors.base import CollectionConfig
+from collectors.camoufox_collector import CamoufoxCollector
 
 
 class CollectorFactoryTests(unittest.TestCase):
@@ -33,6 +35,13 @@ class CollectorFactoryTests(unittest.TestCase):
             collector, attempts = select_collector(mode="balanced")
             self.assertEqual(collector.engine_name, "scrapling")
             self.assertEqual(attempts[0]["collector_engine"], "scrapling")
+
+    def test_camoufox_privacy_options_are_confined_to_opt_in_modes(self) -> None:
+        balanced = CamoufoxCollector(CollectionConfig(mode="balanced"))._launch_options()
+        stealth = CamoufoxCollector(CollectionConfig(mode="stealth"))._launch_options()
+        self.assertEqual(balanced, {"headless": True})
+        self.assertTrue(stealth["block_webrtc"])
+        self.assertEqual(stealth["humanize"], 1.0)
 
 
 if __name__ == "__main__":

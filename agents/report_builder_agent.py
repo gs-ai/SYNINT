@@ -1,4 +1,4 @@
-"""Polished report/export generation agent for SYNINT investigations."""
+"""Polished report/export generation agent for SYNINT v5 investigations."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import re
 from agents.base_agent import OSINTAgent
 from core.exporter import write_export_bundle
 from synint_paths import INVESTIGATIONS_DIR
+from synint_version import SYNINT_RELEASE, SYNINT_VERSION
 from ._pipeline import unpack_pipeline_input
 from ._shared import ok, skipped, structured_error
 
@@ -194,6 +195,8 @@ class ReportBuilderAgent(OSINTAgent):
                 output_dir = output_root / case_name
 
             summary = {
+                "product": SYNINT_RELEASE,
+                "synint_version": SYNINT_VERSION,
                 "target": target,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "agent_count": len(agent_results) + (0 if self.name in agent_results else 1),

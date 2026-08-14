@@ -1,5 +1,7 @@
 from pathlib import Path
 from agents.base_agent import OSINTAgent
+from core.document_forensics import analyze_document
+from core.schemas import utc_now_iso
 from ._shared import cheap_file_type, ok, safe_hash_file, skipped, structured_error
 
 class MetadataExtractionAgent(OSINTAgent):
@@ -37,6 +39,9 @@ class MetadataExtractionAgent(OSINTAgent):
             hit_tokens = [t for t in self.SUSPICIOUS_TOKENS if t in lowered]
             ftype = cheap_file_type(str(p))
 
+            sha256 = safe_hash_file(str(p), "sha256")
+            analysis_timestamp = utc_now_iso()
+            document_forensics = analyze_document(p, source_sha256=sha256)
             findings = {
                 "exists": True,
                 "path": str(p.resolve()),
@@ -46,9 +51,18 @@ class MetadataExtractionAgent(OSINTAgent):
                 "size_bytes": st.st_size,
                 "created_ts": getattr(st, "st_ctime", None),
                 "modified_ts": getattr(st, "st_mtime", None),
-                "sha256": safe_hash_file(str(p), "sha256"),
+                "sha256": sha256,
                 "md5": safe_hash_file(str(p), "md5"),
                 "suspicious_filename_tokens": hit_tokens,
+                "analysis_timestamp": analysis_timestamp,
+                "mime_type": document_forensics.get("mime_type"),
+                "document_forensics": document_forensics,
+                "provenance": {
+                    "source_path": str(p.resolve()),
+                    "source_sha256": sha256,
+                    "analysis_timestamp": analysis_timestamp,
+                    "extractor": "MetadataExtractionAgent",
+                },
             }
 
             risk = 0.05

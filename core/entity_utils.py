@@ -29,6 +29,10 @@ DATE_TOKEN_RE = re.compile(
 PERSON_LIKE_RE = re.compile(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b")
 ORG_HINT_RE = re.compile(r"\b[A-Z][A-Za-z0-9&.-]{1,40}\s+(?:Inc|LLC|Ltd|Corp|Company|Group|Labs|Technologies)\b")
 ADDRESS_RE = re.compile(r"\b\d{1,6}\s+[A-Za-z0-9 .'-]+\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr)\b", re.I)
+BITCOIN_WALLET_RE = re.compile(r"(?<![A-Za-z0-9])(?:bc1[ac-hj-np-z02-9]{11,71}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})(?![A-Za-z0-9])")
+ETHEREUM_WALLET_RE = re.compile(r"(?<![A-Fa-f0-9])0x[A-Fa-f0-9]{40}(?![A-Fa-f0-9])")
+UUID_RE = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b")
+SSN_LIKE_RE = re.compile(r"(?<!\d)(\d{3})-(\d{2})-(\d{4})(?!\d)")
 _TRAILING_PUNCTUATION = ".,;:!?)]}>\"'"
 _LEADING_PUNCTUATION = "([<{\"'"
 
@@ -174,6 +178,28 @@ def extract_entities_from_text(text: str) -> Dict[str, List[str]]:
         "suspected_orgs": orgs,
         "addresses": addresses,
     }
+
+
+def extract_entities_enhanced(text: str) -> Dict[str, List[str]]:
+    """Return legacy entities plus opt-in deterministic structured identifiers.
+
+    This is deliberately separate from :func:`extract_entities_from_text` so
+    existing callers and output semantics remain unchanged. SSN-like matches
+    are masked before return; this helper never emits their raw values.
+    """
+    body = unobfuscate_text(text)
+    enhanced = {key: list(values) for key, values in extract_entities_from_text(body).items()}
+    enhanced.update(
+        {
+            "bitcoin_wallets": sorted(set(match.group(0) for match in BITCOIN_WALLET_RE.finditer(body))),
+            "ethereum_wallets": sorted(set(match.group(0).lower() for match in ETHEREUM_WALLET_RE.finditer(body))),
+            "uuids": sorted(set(match.group(0).lower() for match in UUID_RE.finditer(body))),
+            "ssn_like_redacted": sorted(
+                {f"***-**-{match.group(3)}" for match in SSN_LIKE_RE.finditer(body)}
+            ),
+        }
+    )
+    return enhanced
 
 
 def normalize_date_to_iso(raw: str) -> str | None:

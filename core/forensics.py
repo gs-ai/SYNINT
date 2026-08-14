@@ -1,4 +1,4 @@
-"""Forensic ledger helpers for SYNINT v4 artifact integrity."""
+"""Forensic ledger helpers for SYNINT v5 artifact integrity."""
 
 from __future__ import annotations
 

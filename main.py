@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI entrypoint for SYNINT v4 pipeline execution and reporting."""
+"""CLI entrypoint for SYNINT v5 pipeline execution and reporting."""
 
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ from urllib.parse import urlparse
 
 from agent_manager import AgentManager
 from agent_manager import RuntimePolicy
-from agents import AGENT_ORDER, available_agent_names, load_agent_classes
+from agents import AGENT_ORDER, OPTIONAL_AGENT_ORDER, available_agent_names, load_agent_classes
 from core import CheckpointStore, EvidenceLedger, InvestigationDatabase
 from runtime_fingerprint import build_run_metadata
 from synint_paths import REPORTS_DIR
+from synint_version import SYNINT_RELEASE, SYNINT_VERSION
 
 REPORTS_ROOT = REPORTS_DIR
 REPORT_JSON_NAME = "synint_report.json"
@@ -158,6 +159,8 @@ def build_report_payload(
     }
 
     return {
+        "product": SYNINT_RELEASE,
+        "synint_version": SYNINT_VERSION,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "target": target,
         "execution_model": execution_model,
@@ -203,7 +206,7 @@ def generate_html_report(report: Dict[str, Any], filename: Path = REPORTS_ROOT /
             """<!DOCTYPE html>
 <html>
 <head>
-    <title>SYNINT Report</title>
+    <title>__SYNINT_RELEASE__ Report</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
@@ -234,8 +237,8 @@ def generate_html_report(report: Dict[str, Any], filename: Path = REPORTS_ROOT /
     </style>
 </head>
 <body>
-    <h1>SYNINT Report</h1>
-"""
+    <h1>__SYNINT_RELEASE__ Report</h1>
+""".replace("__SYNINT_RELEASE__", SYNINT_RELEASE)
         ]
 
         html_parts.append(f"    <p><strong>Target:</strong> {escape(str(report.get('target', '')))}</p>\n")
@@ -385,8 +388,16 @@ def _select_agent_names(include_names: set[str], exclude_names: set[str]) -> Seq
     if unknown:
         raise ValueError(f"Unknown agent class name(s): {', '.join(unknown)}")
 
+    # Default candidate order is unchanged (AGENT_ORDER only), so a run with
+    # no --agents filter behaves exactly as before this addition. Optional
+    # agents (OPTIONAL_AGENT_ORDER) never run unless explicitly included.
+    candidate_order = list(AGENT_ORDER)
+    for name in OPTIONAL_AGENT_ORDER:
+        if name in include_names and name not in candidate_order:
+            candidate_order.append(name)
+
     selected: list[str] = []
-    for name in AGENT_ORDER:
+    for name in candidate_order:
         if include_names and name not in include_names:
             continue
         if name in exclude_names:
@@ -399,7 +410,12 @@ def _select_agent_names(include_names: set[str], exclude_names: set[str]) -> Seq
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run SYNINT across selected agents.")
+    parser = argparse.ArgumentParser(description=f"Run {SYNINT_RELEASE} across selected agents.")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"{SYNINT_RELEASE} ({SYNINT_VERSION})",
+    )
     parser.add_argument("target", nargs="?", help="Target indicator to analyze")
     parser.add_argument(
         "--agents",
@@ -462,13 +478,18 @@ def _print_available_agents() -> None:
     print("Available agents:")
     for name in AGENT_ORDER:
         print(f"- {name}")
+    if OPTIONAL_AGENT_ORDER:
+        print("Optional agents (not run by default; select explicitly with --agents):")
+        for name in OPTIONAL_AGENT_ORDER:
+            print(f"- {name}")
 
 
 def main() -> None:
     parser = _build_arg_parser()
     args = parser.parse_args()
     logger.info(
-        "SYNINT invoked (target=%s, list_agents=%s, include=%s, exclude=%s, pipeline=%s, pipeline_mode=%s, legacy=%s, resume=%s)",
+        "%s invoked (target=%s, list_agents=%s, include=%s, exclude=%s, pipeline=%s, pipeline_mode=%s, legacy=%s, resume=%s)",
+        SYNINT_RELEASE,
         args.target,
         args.list_agents,
         bool(str(args.agents).strip()),
@@ -512,7 +533,7 @@ def main() -> None:
         logger.error(str(exc))
         sys.exit(1)
 
-    logger.info("Starting SYNINT analysis for target: %s", target)
+    logger.info("Starting %s analysis for target: %s", SYNINT_RELEASE, target)
     logger.info("Selected %d agents.", len(selected_agent_names))
     start_time = time.time()
     report_json_path = run_reports_dir / REPORT_JSON_NAME
@@ -690,7 +711,7 @@ def main() -> None:
                 logger.info("Partial failure report persisted to %s and %s", report_json_path, report_html_path)
         except Exception as report_exc:
             logger.exception("Failed to persist partial failure report: %s", report_exc)
-        logger.exception("An error occurred during SYNINT execution: %s", exc)
+        logger.exception("An error occurred during %s execution: %s", SYNINT_RELEASE, exc)
         sys.exit(1)
 
 

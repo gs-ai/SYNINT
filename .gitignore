@@ -51,6 +51,17 @@ tmp/
 *.log
 *.sqlite
 *.db
+*.sqlite-*
+*.db-*
+
+# Raw or high-volume investigation captures
+*.warc
+*.warc.gz
+*.pcap
+*.pcapng
+*.har
+*.dmp
+*.dump
 
 # Local environment and secrets
 .env
@@ -60,4 +71,14 @@ tmp/
 *.pem
 *.p12
 *.pfx
+*.jks
+*.keystore
+*.kdbx
+.netrc
+.npmrc
+.pypirc
+credentials.*
 secrets.*
+
+# Local planning notes
+docs/recommendations for synint.txt

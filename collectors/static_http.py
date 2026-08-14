@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+from core.redaction import redact_url_credentials
 from .base import BaseCollector, CollectionResult, CollectorCapabilities
 from .utils import (
     create_safe_session,
@@ -129,7 +130,7 @@ class StaticHttpCollector(BaseCollector):
             final_url = str(response.url)
             redirects = [str(hist.url) for hist in response.history] + [final_url]
         except Exception as exc:
-            error = str(exc)
+            error = redact_url_credentials(exc)
 
         cf_signal = detect_cloudflare_challenge(status_code=status_code, headers=headers, content=content)
         fallback_used = False
