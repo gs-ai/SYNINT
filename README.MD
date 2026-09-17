@@ -176,7 +176,7 @@ python3 main.py https://target.tld --legacy-run-all --collection-mode stealth
 
 Each run writes to:
 
-- `reports/<target-mm.dd.yy-HHMM>/`
+- `reports/<target-mm.dd.yy-HHMM>/` (a numeric suffix is appended if that directory already exists)
 
 Per-run files:
 
